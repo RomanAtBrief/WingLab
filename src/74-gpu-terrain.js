@@ -272,7 +272,7 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
   let bedPhase=y*1.65+1.6*n1+0.65*sin(y*.13+n3*8.0);
   let bedding=pow(.5+.5*sin(bedPhase),8.0);
   let broken=.3+.7*vnP(uv*4096.0+2.7,4096.0);
-  rc *= .94+.09*sin(y*.49+n3*3.0)-.18*bedding*broken;
+  rc *= .97+.035*sin(y*.49+n3*3.0)-.10*bedding*broken;
   rc = mix(rc,lin(vec3f(.35,.30,.26)),pow(smoothstep(.55,.85,n2),2.0)*.23);
   let st = 0.55 * vnP(uv * 2048.0, 2048.0) + 0.45 * vnP(uv * 512.0, 512.0);
   let rimY = select(305.0, 166.0, y < 172.0);
@@ -648,18 +648,23 @@ fn layerH(uv: vec2f, l: u32) -> vec2f {   // (height, albedo modulation)
   textureStore(oD, id.xy, id.z, vec4f(sat(hc.y * 0.5), nn.x * 0.5 + 0.5, nn.y * 0.5 + 0.5, sat(hc.x)));
 }`, 'terrain-detail');
 
-    R.detail = d.createTexture({ size: [512, 512, 6], format: 'rgba8unorm', mipLevelCount: 10, usage: U.TEXTURE_BINDING | U.STORAGE_BINDING | U.RENDER_ATTACHMENT | U.COPY_DST, label: 'detail' });
+    R.detail = d.createTexture({ size: [512, 512, 7], format: 'rgba8unorm', mipLevelCount: 10, usage: U.TEXTURE_BINDING | U.STORAGE_BINDING | U.RENDER_ATTACHMENT | U.COPY_DST, label: 'detail' });
     const e = d.createCommandEncoder();
     d.queue.writeBuffer(R.genBuf, 0, new Float32Array(16));
     G.dispatch(e, P.detail, [G.bind(P.detail, 0, [R.genBuf, R.detail.createView({ dimension: '2d-array', baseMipLevel: 0, mipLevelCount: 1 })])], 64, 64, 6);
     d.queue.submit([e.finish()]);
-    G.genMips(R.detail, 'rgba8unorm', 6);
+    G.genMips(R.detail, 'rgba8unorm', 7);
     // CC0 scanned stone, packed as luminance / tangent normal XY / roughness.
     // Keep the generated material as a fallback if the local asset cannot load.
     fetch('assets/rock-packed.png').then(r => {if(!r.ok)throw new Error(r.status);return r.blob();})
       .then(b => createImageBitmap(b,{colorSpaceConversion:'none',premultiplyAlpha:'none'}))
-      .then(bitmap => {d.queue.copyExternalImageToTexture({source:bitmap},{texture:R.detail,origin:[0,0,0]},[512,512]);bitmap.close();G.genMips(R.detail,'rgba8unorm',6);})
+      .then(bitmap => {d.queue.copyExternalImageToTexture({source:bitmap},{texture:R.detail,origin:[0,0,0]},[512,512]);bitmap.close();G.genMips(R.detail,'rgba8unorm',7);})
       .catch(e => console.warn('Using procedural rock material:',e.message));
+
+    fetch('assets/rock-color.jpg').then(r=>{if(!r.ok)throw new Error(r.status);return r.blob();})
+      .then(b=>createImageBitmap(b,{colorSpaceConversion:'none',premultiplyAlpha:'none',resizeWidth:512,resizeHeight:512}))
+      .then(bitmap=>{d.queue.copyExternalImageToTexture({source:bitmap},{texture:R.detail,origin:[0,0,6]},[512,512]);bitmap.close();G.genMips(R.detail,'rgba8unorm',7);R.colorReady=true;})
+      .catch(e=>console.warn('Using procedural rock color:',e.message));
 
     // grid mesh shared by terrain and water nodes
     const vs = [], ix = [];
@@ -764,11 +769,19 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   let s1 = 1.0 / 6.0; let s2 = 1.0 / 38.0;
   let rX = textureSample(det, smp, vec2f(w.y, i.hh) * s1, 0); let rY = textureSample(det, smp, w * s1, 0); let rZ = textureSample(det, smp, vec2f(w.x, i.hh) * s1, 0);
   let rX2 = textureSample(det, smp, vec2f(w.y, i.hh) * s2, 0); let rZ2 = textureSample(det, smp, vec2f(w.x, i.hh) * s2, 0);
+  // Full-color scanned stone in world-space triplanar coordinates. Two
+  // incommensurate scales and an offset hide the obvious repeating tile.
+  let scanX=textureSample(det,smp,vec2f(w.y,i.hh)/5.5,6).rgb;
+  let scanY=textureSample(det,smp,w/5.5,6).rgb;
+  let scanZ=textureSample(det,smp,vec2f(w.x,i.hh)/5.5,6).rgb;
+  let scanWide=textureSample(det,smp,vec2f(w.x*.73+w.y*.68,i.hh)/19.7+vec2f(.37,.61),6).rgb;
+  let scan=pow(mix(scanX*tw.x+scanY*tw.y+scanZ*tw.z,scanWide,.35),vec3f(2.2));
   let cano = textureSample(det, smp, w / 31.0, 2) * 0.6 + textureSample(det, smp, w / 83.0, 2) * 0.4;
   let snd = textureSample(det, smp, w / 11.0, select(3, 4, F.place == 1u)) * 0.6 + textureSample(det, smp, w / 47.0, select(3, 4, F.place == 1u)) * 0.4;
   let near = sat(1.0 - dist / 8000.0);
   // coarse distant geometry averages sea floor and islands: let the water show wherever most of the footprint is under the sea
-  if (m.a > 0.5) { discard; }
+  // Let the depth buffer clip submerged terrain. Discarding an averaged
+  // water mask punched holes into steep island shores and canyon banks.
   var N = Nm; var col = mapCol; var rough = 0.9; var rock = m.r; var veg = m.b; var sand = 1.0 - m.g;
   var y = i.hh;
   if (F.place == 1u) {
@@ -807,6 +820,9 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   N = normalize(N + (dR * wr * 1.15 + dC * wv * 0.9 + dS * ws * 0.35) * fade);
   let modA = (rk.r * 2.0) * wr + mix(1.0, cano.r * 2.0, 0.75) * wv + (snd.r * 2.0) * ws;
   col *= mix(1.0, modA / max(wr + wv + ws, 1e-3), fade);
+  let scanL=max(dot(scan,vec3f(.2126,.7152,.0722)),.025);
+  let chroma=clamp(scan/scanL,vec3f(.65),vec3f(1.35));
+  col*=mix(vec3f(1.0),chroma*clamp(scanL/.19,.55,1.5),wr*fade*TP.p1*.48);
   let cav = mix(1.0, sat(0.6 + rk.a * 0.55), wr * fade) * mix(1.0, 0.65 + 0.45 * cano.a, wv * fade);
   rough = mix(rough, clamp(rk.a, 0.5, 1.0), wr * fade * .65);
   var o: GO;
@@ -866,27 +882,27 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   let r2 = textureSample(det, smp, i.wxz / 4.1 - vec2f(TP.time * 0.037, -TP.time * 0.029), 5).gb * 2.0 - 1.0;
   let rip = (r1 * 0.09 + r2 * 0.05) * (0.3 + TP.waveAmp) * sat(1.0 - dist / 2500.0);
   // wind texture that stays visible from altitude: long, slow swell patterns
-  let r3 = textureSample(det, smp, i.wxz / 170.0 + vec2f(TP.time * 0.004, TP.time * 0.0025), 5).gb * 2.0 - 1.0;
-  let r4 = textureSample(det, smp, i.wxz / 640.0 - vec2f(TP.time * 0.0015, -TP.time * 0.001), 5).gb * 2.0 - 1.0;
-  let swell = (r3 * 0.05 + r4 * 0.035) * (0.25 + TP.waveAmp) * sat(dist / 900.0) * sat(1.0 - dist / 60000.0);
+  let r3 = textureSample(det, smp, i.wxz / 72.0 + vec2f(TP.time * 0.008, TP.time * 0.003), 5).gb * 2.0 - 1.0;
+  let r4 = textureSample(det, smp, i.wxz / 211.0 - vec2f(TP.time * 0.003, -TP.time * 0.001), 5).gb * 2.0 - 1.0;
+  let swell = (r3 * 0.024 + r4 * 0.012) * (0.25 + TP.waveAmp) * sat(dist / 900.0) * sat(1.0 - dist / 60000.0);
   let N = normalize(vec3f(-sx - rip.x - swell.x, 1.0, -sz - rip.y - swell.y));
   // in-water colour: light reflected by the floor, absorbed twice on the way (red first → turquoise shallows), plus scattering in deep water
   let bed4 = textureSample(alb, smp, i.uv); let bed = bed4.rgb * bed4.rgb;
   let depth = max(F.water - Hs(i.uv, 0), 0.0);
   var sig = vec3f(0.25, 0.065, 0.035); var omega = vec3f(0.003, 0.031, 0.045);
-  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.025, 0.115, 0.095); }
+  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.018, 0.060, 0.049); }
   let tr = exp(-sig * depth * 2.0);
   var col = bed * tr + omega * (1.0 - tr);
   if(F.place==1u){ // emerald shallows into blue-green channel water
-    col=mix(vec3f(.075,.24,.13),col,smoothstep(.2,4.0,depth));
+    col=mix(vec3f(.056,.13,.078),col,smoothstep(.2,4.0,depth));
   }
   // a thin line of foam where the sea meets the beach
   let foam = smoothstep(0.7, 0.0, depth + 0.5 * (textureSample(det, smp, i.wxz / 6.0 + TP.time * 0.02, 1).r - 0.5)) * smoothstep(0.0, 0.15, depth) * sat(1.0 - dist / 3000.0) * sat(TP.waveAmp * 2.0);
   col = mix(col, vec3f(0.85), foam * 0.7);
-  let baseRough = mix(0.12, 0.23, sat(dist / 9000.0)) + 0.08 * TP.waveAmp * sat(dist / 20000.0) + foam * 0.5;
+  let baseRough = mix(0.16, 0.25, sat(dist / 9000.0)) + 0.08 * TP.waveAmp * sat(dist / 20000.0) + foam * 0.5;
   // Filter subpixel wave-normal variance into roughness, avoiding glitter flicker.
   let nx=dpdx(N);let ny=dpdy(N);
-  let rough=clamp(sqrt(baseRough*baseRough+.5*(dot(nx,nx)+dot(ny,ny))),.12,.7);
+  let rough=clamp(sqrt(baseRough*baseRough+.5*(dot(nx,nx)+dot(ny,ny))),.10,.7);
   var o: GO;
   o.a = vec4f(sat3(col), 1.0);
   o.n = vec4f(N, rough);
@@ -998,6 +1014,7 @@ ${GAtmos.LL}
       const nq = RES / 4;
       R.mmBuf = G.buf(nq * nq * 8, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, null, 'minmax');
       R.readBuf = d.createBuffer({ size: nq * nq * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      R.heightRead=d.createBuffer({size:RES*RES*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       const lr = G.sampler('linRepeat'), auxV = R.aux.createView(), aux2V = R.aux2.createView();
       BG.draw = G.bind(P.draw, 0, [frameBuf, R.tBuf, R.nodeBuf, R.hgtV, R.alb.createView(), R.nrm.createView(), R.mat.createView(), R.detail.createView({ dimension: '2d-array' }), G.sampler('aniso'), auxV, aux2V, lr]);
       BG.water = G.bind(P.water, 0, [frameBuf, R.tBuf, R.waterBuf, R.hgtV, G.sampler('aniso'), R.detail.createView({ dimension: '2d-array' }), R.alb.createView()]);
@@ -1026,11 +1043,13 @@ ${GAtmos.LL}
     const nq = RES / 4;
     G.dispatch(enc, P.minmax, [G.bind(P.minmax, 0, [R.hgt.createView({ baseMipLevel: 0, mipLevelCount: 1 }), R.mmBuf])], nq / 8, nq / 8, 1, 'minmax');
     enc.copyBufferToBuffer(R.mmBuf, 0, R.readBuf, 0, nq * nq * 8);
+    enc.copyTextureToBuffer({texture:R.hgt},{buffer:R.heightRead,bytesPerRow:RES*4},[RES,RES]);
   }
   function afterGenerate() {
     G.genMips(R.nrm, 'rgba16float'); G.genMips(R.alb, 'rgba8unorm'); G.genMips(R.mat, 'rgba8unorm');
     const key = place.key;
-    R.readBuf.mapAsync(GPUMapMode.READ).then(() => {
+    Promise.all([R.readBuf.mapAsync(GPUMapMode.READ),R.heightRead.mapAsync(GPUMapMode.READ)]).then(() => {
+      const heights=new Float32Array(R.heightRead.getMappedRange().slice(0));R.heightRead.unmap();
       const n = RES / 4, ab = new Float32Array(R.readBuf.getMappedRange().slice(0)); R.readBuf.unmap();
       if (!place || place.key !== key) return;
       const mn0 = new Float32Array(n * n), mx0 = new Float32Array(n * n);
@@ -1045,15 +1064,15 @@ ${GAtmos.LL}
         }
         pyr.push({ n: m, mn, mx });
       }
-      cpu = { n, h: mx0, pyr, tile: place.tile };
-    }).catch(() => {});
+      cpu = { n:RES, h:heights, pyr, tile: place.tile };
+    }).catch(error => {console.error('Terrain readback failed:',error);G.S.errors.push(String(error));});
   }
   function shade(enc, sun) {
     writeGen(sun);
     G.dispatch(enc, P.shade, [G.bind(P.shade, 0, [R.genBuf, R.hgtV, R.shV])], SHRES / 8, SHRES / 8, 1, 'terrain-shade');
   }
 
-  /* ---------- CPU height queries (block maxima: safe for keeping the aircraft and camera above ground) ---------- */
+  /* ---------- CPU height queries: full-resolution surface for camera/flight, separate maxima for bounds ---------- */
   function heightAt(wx, wz) {
     if (!cpu) return place ? place.water : 0;
     const n = cpu.n, x = ((wx / cpu.tile) % 1 + 1) % 1 * n - 0.5, z = ((wz / cpu.tile) % 1 + 1) % 1 * n - 0.5;
@@ -1062,7 +1081,7 @@ ${GAtmos.LL}
   }
   function bounds(wx, wz, size) {   // min/max height over a world square (conservative)
     if (!cpu) return [Math.min(0, place.water) - 100, place.hmax + 200];
-    const n = cpu.n, texel = cpu.tile / n;
+    const n = cpu.pyr[0].n, texel = cpu.tile / n;
     let lvl = Math.max(0, Math.ceil(Math.log2(size / texel)) - 1);
     lvl = Math.min(lvl, cpu.pyr.length - 1);
     const L = cpu.pyr[lvl], ln = L.n, ts = cpu.tile / ln;
@@ -1121,7 +1140,7 @@ ${GAtmos.LL}
     d.queue.writeBuffer(R.nodeBuf, 0, nodes.buffer, 0, nNodes * 16);
     d.queue.writeBuffer(R.waterBuf, 0, waterNodes.buffer, 0, nWater * 16);
     const maxMip = R.hgt.mipLevelCount - 1;
-    d.queue.writeBuffer(R.tBuf, 0, new Float32Array([lodK, texel, maxMip, RES, 1, (q.time || 0) % 1000, place.waves, 0]));
+    d.queue.writeBuffer(R.tBuf, 0, new Float32Array([lodK, texel, maxMip, RES, 1, (q.time || 0) % 1000, place.waves, R.colorReady?1:0]));
   }
   // shadow casters: coarser selection around a cascade's box
   let sNodes = new Float32Array(4 * 4096 * 4), sCount = [0, 0, 0, 0];

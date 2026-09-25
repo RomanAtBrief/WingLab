@@ -346,10 +346,10 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
   }
   // quality levels: render scale, cloud steps, trees
   // Keep geometry at native CSS resolution; shed cloud samples before sharpness.
-  const LEVELS = [{ s: 1, c: 72, t: false }, { s: 1, c: 80, t: true }, { s: 1, c: 88, t: true }, { s: 1.15, c: 104, t: true }, { s: 1.35, c: 128, t: true }];
+  const LEVELS = [{ s: .85, c: 64, t: true }, { s: 1, c: 80, t: true }, { s: 1, c: 88, t: true }, { s: 1.15, c: 104, t: true }, { s: 1.35, c: 128, t: true }];
   function applyLevel() {
     const L = LEVELS[perf.level]; perf.scale = L.s;
-    GClouds.cfg.steps = L.c; GTrees.on = L.t;
+    GClouds.cfg.steps = L.c; GTrees.on = true;GTrees.quality=perf.level===0?.65:perf.level===1?.8:1;
     resize();
   }
   function resize() {
@@ -384,10 +384,10 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
 
   let envTimer = 0, frameCount = 0;
   const maxFrames = +((location.hash.match(/frames=(\d+)/) || [])[1] || 0);
-  let failed = false, gpuBusy = false, lastRender = 0;
+  let failed = false, gpuBusy = false, lastRender = 0, presented = false;
   function frame(dt) {
     // if this GPU cannot run the WebGPU renderer, reload once with the WebGL renderer
-    if (!failed && (G.S.lost || (G.S.errors.length > 3 && time < 20))) { failed = true; console.warn('Wing Lab: WebGPU renderer failed — switching to WebGL.', G.S.errors.slice(0, 3)); if (!/readback/.test(location.hash)) { location.hash = 'gl'; location.reload(); } return; }
+    if (!failed && (G.S.lost || G.S.errors.length > 0)) { failed = true; console.warn('Wing Lab: WebGPU renderer failed — switching to WebGL.', G.S.errors.slice(0, 3)); host.dispatchEvent(new CustomEvent('rendererfailure')); return; }
     if (!air || G.S.lost || gpuBusy || document.hidden || (lastRender && performance.now()-lastRender<1000/30)) return;
     if (maxFrames && ++frameCount > maxFrames) return;
     const now=performance.now(), elapsed=lastRender?Math.min(.15,(now-lastRender)/1000):dt;lastRender=now;dt=elapsed;
@@ -408,7 +408,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     // world: the aircraft flies along +x; the ground scrolls underneath
     const TP = GTerrain.PLACES[EnvGPU.state.place];
     if (world.place !== EnvGPU.state.place && GTerrain.place && GTerrain.place.key === EnvGPU.state.place) { world.place = EnvGPU.state.place; [world.x, world.z] = GTerrain.startPoint(); world.lastAlt = null; GPost.reset(); }
-    if(world.routePlace!==EnvGPU.state.place&&GTerrain.cpuReady&&GTerrain.place?.key===EnvGPU.state.place){world.routePlace=EnvGPU.state.place;FlightDirector.configure(world.routePlace,GTerrain.scenicRoute(),world.routePlace==='canyon'?180:3000);GPost.reset();}
+    if(world.routePlace!==EnvGPU.state.place&&GTerrain.cpuReady&&GTerrain.place?.key===EnvGPU.state.place){world.routePlace=EnvGPU.state.place;const requested=Number(new URLSearchParams(location.hash.slice(1)).get('h'));FlightDirector.configure(world.routePlace,GTerrain.scenicRoute(),requested>0?Math.min(requested,16000):world.routePlace==='canyon'?180:3000);GPost.reset();}
     const previousX=world.x,previousZ=world.z;
     const nav=FlightDirector.step(dt,vis.V,size,GTerrain.heightAt);
     if(FlightDirector.ready){world.x=nav.x;world.z=nav.z;}else world.x+=vis.V*dt;
@@ -419,10 +419,12 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const minAlt = Math.max(ground, TP.water) + size * 0.8 + 25;
     const alt = Math.max(FlightDirector.ready?nav.alt:vis.h, minAlt);
     const dAlt = world.lastAlt === null ? 0 : alt - world.lastAlt; world.lastAlt = alt;
-    // keep the camera above the ground
-    const cg = GTerrain.heightAt(world.x + camera.position.x, world.z + camera.position.z);
-    const minY = Math.max(cg, TP.water) + 2.5 - alt;
-    if (camera.position.y < minY) camera.position.y = minY;
+    // Retract the orbit along its sight line when a cliff blocks it. Raising the
+    // camera over a wall made the aircraft disappear behind that wall.
+    const desired=camera.position.clone();let allowed=1;
+    for(let k=1;k<=40;k++){const t=k/40,x=world.x+desired.x*t,z=world.z+desired.z*t;let g=TP.water;for(const [ox,oz] of [[0,0],[16,0],[-16,0],[0,16],[0,-16]])g=Math.max(g,GTerrain.heightAt(x+ox,z+oz));if(alt+desired.y*t<g+12){allowed=Math.max(.08,(k-1)/40);break;}}
+    world.cameraFraction=Math.min(allowed,(world.cameraFraction??allowed)+(1-Math.exp(-Math.max(dt,.016)*2))*.15);
+    camera.position.copy(desired).multiplyScalar(world.cameraFraction);
     camera.lookAt(0, size * 0.02, 0);
     const a = vis.alpha * Math.PI / 180, buf = vis.stalled ? 0.012 : 0.0025;
     pitch.rotation.set(nav.bank+Math.sin(time * 1.3) * buf * 1.5 + (vis.stalled && dt ? (Math.random() - 0.5) * buf : 0), 0, a + nav.pitch + Math.sin(time * 0.9) * buf);
@@ -449,6 +451,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     setArrow(arrows.thrust, new T.Vector3(Math.cos(a), Math.sin(a), 0), 2.6 * vis.T / td);
     setArrow(arrows.drag, new T.Vector3(-1, 0, 0), 2.6 * vis.D / td);
     camera.updateMatrixWorld();
+    const centre=new T.Vector3(0,0,0).project(camera);host.dataset.aircraftX=String((centre.x+1)*bounds.width/2);host.dataset.aircraftY=String((1-centre.y)*bounds.height/2);host.dataset.cameraDistance=camera.position.length().toFixed(1);host.dataset.ground=ground.toFixed(1);host.dataset.cameraFraction=world.cameraFraction.toFixed(3);
     const r = host.getBoundingClientRect();
     for (const [n, el] of Object.entries(labels)) {
       const A = arrows[n];
@@ -481,7 +484,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     env.wake=[air.span,air.L,vis.V,Math.max(0,vis.CL)];
     GR.frame({ camera, roots: [holder], dt: Math.max(dt, 1e-4), env, envDue, jitter: true });
     // At most one in-flight frame: avoid an unbounded command queue on slow GPUs.
-    gpuBusy=true;G.device.queue.onSubmittedWorkDone().then(()=>{gpuBusy=false;}).catch(()=>{gpuBusy=false;});
+    gpuBusy=true;G.device.queue.onSubmittedWorkDone().then(()=>{gpuBusy=false;if(GTerrain.cpuReady&&world.routePlace===EnvGPU.state.place&&!G.S.errors.length)presented=true;}).catch(()=>{gpuBusy=false;});
     adapt(elapsed);
     if(!world.telemetryAt||performance.now()-world.telemetryAt>150){world.telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav,alt}}));}
     void t0;
@@ -516,5 +519,5 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     Model.dispose(built.group);
     return url;
   }
-  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, releaseThumbnails, setInsets, pause: p => { paused = p; }, get view() { return viewName; }, gpu: true, perf };
+  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, releaseThumbnails, setInsets, pause: p => { paused = p; }, get ready(){return presented&&GTerrain.cpuReady&&GTerrain.place?.key===EnvGPU.state.place&&world.routePlace===EnvGPU.state.place;}, get view() { return viewName; }, gpu: true, perf };
 })();

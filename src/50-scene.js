@@ -285,7 +285,7 @@ const Scene3DGL = (() => {
       hemi.color.copy(o.lightColor).multiplyScalar(0.4).addScalar(0.1);
     }
     EnvGL.render(envRT, camera);
-    composer.render();if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
+    composer.render();host.dataset.presented='true';if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
     // keep the frame rate up: trade cloud and terrain detail for speed
     perf.acc += performance.now() - t0; perf.n++;
     if (perf.n >= 30) {
@@ -308,5 +308,5 @@ const Scene3DGL = (() => {
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
     g.putImageData(img, 0, 0); return cv.toDataURL();
   }
-  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get view() { return viewName; } };
+  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get ready(){return host?.dataset.presented==='true';}, get view() { return viewName; } };
 })();

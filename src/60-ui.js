@@ -253,7 +253,8 @@
     const el = $(id), was = !el.hidden;if(id==='acPop'&&was===false)makeThumbs();
     el.hidden = was; $('acBtn').setAttribute('aria-expanded', String(id === 'acPop' && !was)); $('envBtn').setAttribute('aria-expanded', String(id === 'envPop' && !was));
     for(const [pop,btn] of [['overlaysPop','overlaysBtn'],['morePop','moreBtn']])$(btn).setAttribute('aria-expanded',String(!$(pop).hidden));
-    if (was) return;
+    if (was){layout();return;}
+    if(innerWidth<1024){S.fly=S.drawer=S.build=false;$('infoCard').hidden=true;}layout();
     $('toast').hidden=true;clearTimeout(toastT);
     const r = (anchor.getClientRects().length?anchor:$('moreBtn')).getBoundingClientRect(), w = el.offsetWidth;
     el.style.top = (r.bottom + 8) + 'px';
@@ -274,6 +275,7 @@
   let layoutFrame=0;
   function layout() {
     const mobile=innerWidth<1024, phone=innerWidth<600, edge=16;
+    $('app').dataset.surfaceOpen=String(S.fly||S.drawer||S.build||['acPop','envPop','morePop','overlaysPop'].some(id=>!$(id).hidden));
     if(phone&&S.drawer)S.fly=false;
     $('build').dataset.open=String(S.build);$('build').inert=!S.build;
     $('fly').dataset.open=String(S.fly);$('fly').inert=!S.fly;
@@ -290,30 +292,33 @@
       const rect=dr.getBoundingClientRect(),top=Math.max($('status').getBoundingClientRect().bottom,110)+24;
       const right= S.fly ? (phone?edge:$('fly').offsetWidth+32):R;
       const touchGuide=(innerWidth<1024||matchMedia('(pointer:coarse)').matches)&&!$('pilotHint').hidden&&getComputedStyle($('pilotHint')).display!=='none',landscapeGuide=touchGuide&&innerHeight<500&&innerWidth>innerHeight;
-      const bottom=innerHeight-Math.min(S.drawer?rect.top:innerHeight,phone&&S.fly?$('fly').getBoundingClientRect().top:innerHeight,touchGuide&&!landscapeGuide?$('pilotHint').getBoundingClientRect().top:innerHeight)+24;
+      const bottom=innerHeight-Math.min(S.drawer?rect.top:innerHeight,phone&&S.fly?$('fly').offsetTop:innerHeight,touchGuide&&!landscapeGuide?$('pilotHint').getBoundingClientRect().top:innerHeight)+24;
       Scene3D.setInsets(landscapeGuide?$('pilotHint').getBoundingClientRect().right+16:L,right,bottom,top);S.chartDirty=true;
     });
     if(S.f)update();
   }
 
-  const tilt=TiltInput.create();let tiltOn=false,tiltWaiting=0,tiltStarted=0;
+  const tilt=TiltInput.create();let tiltOn=false,tiltWaiting=0,tiltStarted=0,orientationAt=-Infinity;
   function stopTilt(message='Tilt to steer, or hold the arrows below.'){
-    tiltOn=false;clearTimeout(tiltWaiting);window.removeEventListener('deviceorientation',readTilt);tilt.reset();FlightDirector.setStick(0,0);
+    tiltOn=false;clearTimeout(tiltWaiting);window.removeEventListener('deviceorientation',readTilt);window.removeEventListener('devicemotion',readMotion);tilt.reset();FlightDirector.setStick(0,0);
     $('tiltBtn').textContent='Enable tilt';$('tiltBtn').setAttribute('aria-pressed','false');$('calibrateBtn').hidden=true;$('tiltStatus').textContent=message;
   }
-  function readTilt(e){if(!tiltOn||document.hidden||!document.hasFocus())return;const a=screen.orientation?.angle??window.orientation??0;if(tilt.sample(e.beta,e.gamma,a,performance.now())){clearTimeout(tiltWaiting);$('tiltStatus').textContent='Tilt sideways to bank. Tip the top toward you to climb.';}}
+  function readTilt(e){if(!tiltOn||document.hidden)return;const a=screen.orientation?.angle??window.orientation??0;if(tilt.sample(e.beta,e.gamma,a,performance.now())){orientationAt=performance.now();clearTimeout(tiltWaiting);$('tiltStatus').textContent='Tilt sideways to bank. Tip the top toward you to climb.';}}
+  function readMotion(e){if(!tiltOn||document.hidden||performance.now()-orientationAt<500)return;const g=e.accelerationIncludingGravity;if(g&&tilt.sampleGravity(g.x,g.y,g.z,screen.orientation?.angle??window.orientation??0,performance.now())){clearTimeout(tiltWaiting);$('tiltStatus').textContent='Tilt sideways to bank. Tip toward you to climb.';}}
   function updateTilt(dt){if(!tiltOn)return;if(document.hidden||$('pauseBtn').getAttribute('aria-pressed')==='true'){FlightDirector.setStick(0,0);return;}const v=tilt.step(dt,performance.now());FlightDirector.setStick(v.roll,v.pull);if(!v.fresh&&performance.now()-tiltStarted>1500)$('tiltStatus').textContent='Waiting for motion. Touch arrows still work.';}
   $('tiltBtn').onclick=async()=>{
     if(tiltOn){stopTilt();return;}
-    if(!window.isSecureContext||!window.DeviceOrientationEvent){stopTilt('Motion unavailable here. Use the touch arrows.');return;}
+    if(!window.isSecureContext||(!window.DeviceOrientationEvent&&!window.DeviceMotionEvent)){stopTilt('Motion unavailable here. Use the touch arrows.');return;}
     $('tiltBtn').disabled=true;
     try{
-      const permission=typeof DeviceOrientationEvent.requestPermission==='function'?await DeviceOrientationEvent.requestPermission():'granted';
-      if(permission!=='granted'){stopTilt('Motion permission was declined. Touch arrows still work.');return;}
+      // Start both permission requests inside the same user gesture (iOS Safari).
+      const requests=[window.DeviceOrientationEvent,window.DeviceMotionEvent].filter(Boolean).map(api=>typeof api.requestPermission==='function'?api.requestPermission():Promise.resolve('granted'));
+      const permissions=await Promise.allSettled(requests);
+      if(!permissions.some(p=>p.status==='fulfilled'&&p.value==='granted')){stopTilt('Motion permission was declined. Touch arrows still work.');return;}
       if(FlightDirector.state.mode!=='manual')return;
-      tilt.reset();tiltOn=true;tiltStarted=performance.now();window.addEventListener('deviceorientation',readTilt);
+      tilt.reset();tiltOn=true;tiltStarted=performance.now();orientationAt=-Infinity;window.addEventListener('deviceorientation',readTilt);window.addEventListener('devicemotion',readMotion);
       $('tiltBtn').textContent='Disable tilt';$('tiltBtn').setAttribute('aria-pressed','true');$('calibrateBtn').hidden=false;$('tiltStatus').textContent='Hold comfortably. Your first position becomes level.';
-      tiltWaiting=setTimeout(()=>stopTilt('No motion sensor detected. Use the touch arrows.'),4000);
+      tiltWaiting=setTimeout(()=>stopTilt('No motion sensor detected. Use the touch arrows.'),10000);
     }catch{stopTilt('Motion could not start. Use the touch arrows.');}finally{$('tiltBtn').disabled=false;}
   };
   $('calibrateBtn').onclick=()=>{tilt.recenter();FlightDirector.setStick(0,0);$('tiltStatus').textContent='Centered. This position is level.';};
@@ -336,7 +341,17 @@
   },true);
   document.addEventListener('keyup',e=>{FlightDirector.key(e.key,false);$('manualGuide').querySelector(`[data-key="${e.key.toLowerCase().replace(/[^a-z]/g,'')}"]`)?.classList.remove('active');});addEventListener('blur',()=>{FlightDirector.clearKeys();$('manualGuide').querySelectorAll('.active').forEach(k=>k.classList.remove('active'));});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)FlightDirector.clearKeys();});
-  document.querySelectorAll('[data-flight-key]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);FlightDirector.key(b.dataset.flightKey,true);};['pointerup','pointercancel','lostpointercapture'].forEach(name=>b.addEventListener(name,()=>FlightDirector.key(b.dataset.flightKey,false)));});
+  document.querySelectorAll('[data-flight-key]').forEach(b=>{
+    const release=()=>{b.dataset.held='false';FlightDirector.key(b.dataset.flightKey,false);};
+    b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();b.dataset.held='true';FlightDirector.key(b.dataset.flightKey,true);try{b.setPointerCapture(e.pointerId);}catch{}},{passive:false});
+    ['pointerup','pointercancel','lostpointercapture'].forEach(name=>b.addEventListener(name,release));
+    // Prevent Safari's long-press selection before it can cancel the pointer stream.
+    b.addEventListener('touchstart',e=>{e.preventDefault();b.dataset.held='true';FlightDirector.key(b.dataset.flightKey,true);},{passive:false});
+    b.addEventListener('contextmenu',e=>e.preventDefault());b.addEventListener('selectstart',e=>e.preventDefault());
+    b.addEventListener('touchend',release);b.addEventListener('touchcancel',release);addEventListener('blur',release);
+  });
+  $('app').addEventListener('selectstart',e=>{if(!e.target.closest('input,textarea'))e.preventDefault();});
+  $('app').addEventListener('contextmenu',e=>{if(e.target.closest('button,svg,#viewport'))e.preventDefault();});
   let telemetryAlt=-1;
   $('viewport').addEventListener('flighttelemetry',e=>{
     const n=e.detail;$('routePhase').textContent=n.clearance?'Terrain clearance assist':n.phase;
@@ -351,8 +366,8 @@
     const o = e.target.closest('.opt[data-k]'); if (o && String(S.cfg[o.dataset.k]) !== o.dataset.id) { choose(o.dataset.k, o.dataset.id); return; }
     const g = e.target.closest('.grp-h'); if (g) { const s = g.parentElement, open = s.dataset.open !== 'true'; s.dataset.open = String(open); if (s.dataset.key) S.open[s.dataset.key] = open; return; }
     const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true;syncPopState(); if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();const trigger={acPop:'acBtn',envPop:'envBtn',overlaysPop:'overlaysBtn',morePop:'moreBtn',fly:'flyBtn',build:'flyBtn'}[k];if(trigger)($(trigger).getClientRects().length?$(trigger):$('moreBtn')).focus();return; }
-    const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true; $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
-    const pl = e.target.closest('[data-place]'); if (pl) { S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
+    const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true;layout(); $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
+    const pl = e.target.closest('[data-place]'); if (pl) { if(S.place!==pl.dataset.place){S.loaded=false;$('loading').hidden=false;$('loading').style.opacity='1';$('loadingMessage').textContent='Preparing your flight…';}S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
     const tm = e.target.closest('[data-time]'); if (tm) { S.time = tm.dataset.time; Env.set('time', S.time); renderEnvPop(); return; }
     const wx = e.target.closest('[data-wx]'); if (wx) { S.weather = wx.dataset.wx; Env.set('weather', S.weather); renderEnvPop(); return; }
     if (!e.target.closest('.infocard')) $('infoCard').hidden = true;
@@ -363,7 +378,7 @@
   $('envBtn').addEventListener('click', () => { renderEnvPop(); openPop('envPop', $('envBtn'), true); });
   $('buildBtn').addEventListener('click', () => { S.build = !S.build; if(S.build) S.fly=false; layout(); });
   $('flyBtn').addEventListener('click', () => { S.fly = !S.fly; if(S.fly){S.build=false;if(innerWidth<1024)S.drawer=false;} layout(); });
-  $('chartsBtn').onclick=()=>{S.drawer=!S.drawer;if(S.drawer&&innerWidth<1024){S.fly=false;S.build=false;}layout();};
+  $('chartsBtn').onclick=()=>{$('morePop').hidden=true;syncPopState();S.drawer=!S.drawer;if(S.drawer&&innerWidth<1024){S.fly=false;S.build=false;}layout();};
   $('drawerH').addEventListener('click', () => { S.drawer = !S.drawer; layout();if(!S.drawer)($('chartsBtn').getClientRects().length?$('chartsBtn'):$('moreBtn')).focus(); });
   const tog = (id, key) => $(id).addEventListener('click', () => { const on = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', String(on)); Scene3D.toggle(key, on);if(key==='forces')$('forceSummary').hidden=!on; });
   tog('forcesBtn', 'forces'); tog('flowBtn', 'flow');
@@ -393,10 +408,10 @@
     const tb=e.target.closest('[data-tab]');if(tb)selectTab(tb.dataset.tab);
     const mv=e.target.closest('[data-view]');if(mv){Scene3D.setView(mv.dataset.view);document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x=>x.setAttribute('aria-pressed',String((x.dataset.v||x.dataset.view)===mv.dataset.view)));}
     const mn=e.target.closest('[data-menu]');if(mn){$('morePop').hidden=true;$(mn.dataset.menu).click();}
-    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);syncPopState();
+    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);syncPopState();$('app').dataset.surfaceOpen=String(S.fly||S.drawer||S.build||['acPop','envPop','morePop','overlaysPop'].some(id=>!$(id).hidden));
   });
   document.querySelector('.skip-link').onclick=e=>{e.preventDefault();S.fly=true;S.drawer=false;selectTab('Controls');layout();$('tabControls').focus();};
-  $('status').onclick=()=>{S.fly=true;if(innerWidth<600)S.drawer=false;selectTab('Controls');layout();};
+  $('status').onclick=()=>{['acPop','envPop','morePop','overlaysPop'].forEach(id=>$(id).hidden=true);syncPopState();S.fly=true;if(innerWidth<600)S.drawer=false;selectTab('Controls');layout();};
   $('overlaysBtn').onclick=()=>openPop('overlaysPop',$('overlaysBtn'),true);
   $('moreBtn').onclick=()=>openPop('morePop',$('moreBtn'),true);
   $('valuesBtn').onclick=()=>{S.values=!S.values;$('valuesBtn').setAttribute('aria-pressed',String(S.values));update();};
@@ -427,7 +442,7 @@
 
   /* ---------- start ---------- */
   Charts.readColors(); Charts.attach($('liftChart'), 'lift'); Charts.attach($('dragChart'), 'drag');
-  Scene3D.init($('viewport'), $('labels'), window.WL_MODS);
+  initFlightScene($('viewport'), $('labels'), window.WL_MODS);
   Env.set('place', S.place); Env.set('time', S.time); Env.set('weather', S.weather);
   Profile.init($('profile'));
   // optional start-up state from the link, e.g. #place=canyon&time=golden&ac=spitfire
@@ -441,6 +456,8 @@
     if (h.get('fly') === '1') S.fly = true;
     if (h.get('charts') === '1') S.drawer = true; }
   rebuild(); renderEnvPop(); try{selectTab(sessionStorage.getItem('winglab-tab')||'Controls');}catch{selectTab('Controls');} syncPilot(); layout();
+
+  $('viewport').addEventListener('rendererfailure',()=>{if(!Scene3D.gpu)return;useWebGLFallback($('viewport'),$('labels'),window.WL_MODS);Env.set('place',S.place);Env.set('time',S.time);rebuild();layout();});
 
   let thumbsRunning=false,thumbQueue=null;
   function makeThumbs() {
@@ -461,11 +478,12 @@
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t;
     if (S.perfDirty && t - S.perfT > 160) runPerf();
     if (S.chartDirty && t - S.chartT > 90 && S.drawer) drawCharts();
-    updateTilt(dt);Scene3D.frame(dt); if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
+    updateTilt(dt);try{Scene3D.frame(dt);}catch(error){if(!Scene3D.gpu)throw error;console.warn('Recovering interrupted GPU frame:',error);$('viewport').dispatchEvent(new CustomEvent('rendererfailure'));} if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
     const inf = Profile.info();
     if (inf && Math.abs(inf.vmax - S.lastVmax) > 0.005) { S.lastVmax = inf.vmax;
       $('hlProfile').innerHTML = S.f.stalled || S.f.c.sig > 0.5 ? 'The air <em>breaks away</em> from the top — the wing is stalling.' : inf.vmax > 1.02 ? `Over the top, the air speeds up to <em>${inf.vmax.toFixed(1)}×</em> flight speed, so the pressure there drops.` : 'At this angle the wing makes almost no lift.'; }
-    if (++frames === 3) { $('loading').style.opacity = 0; setTimeout(() => { $('loading').hidden = true; }, 600); /* Picker uses text labels; avoid seven extra GPU contexts at startup. */ }
+    if(!S.loaded&&Scene3D.ready){S.loaded=true;$('loading').style.opacity=0;setTimeout(()=>$('loading').hidden=true,400);}
+    if(!S.loaded&&++frames>600){$('loadingMessage').textContent='Still preparing the landscape…';$('loadingRetry').hidden=false;}
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);

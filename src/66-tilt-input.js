@@ -8,6 +8,14 @@ const TiltInput = (() => {
       if(![beta,gamma,screenAngle,now].every(Number.isFinite))return false;
       const b=beta*Math.PI/180,g=gamma*Math.PI/180,a=screenAngle*Math.PI/180;
       const x=-Math.cos(b)*Math.sin(g),y=Math.sin(b),z=Math.cos(b)*Math.cos(g);
+      return project(x,y,z,screenAngle,now);
+    }
+    function sampleGravity(x,y,z,screenAngle,now){
+      if(![x,y,z,screenAngle,now].every(Number.isFinite)||Math.hypot(x,y,z)<2)return false;
+      return project(-x,-y,-z,screenAngle,now);
+    }
+    function project(x,y,z,screenAngle,now){
+      const a=screenAngle*Math.PI/180;
       const sx=x*Math.cos(a)-y*Math.sin(a),sy=x*Math.sin(a)+y*Math.cos(a);
       latest={roll:Math.atan2(-sx,Math.hypot(sy,z)),pull:Math.atan2(sy,z)};
       if(angle!==screenAngle){baseline=null;roll=pull=0;}angle=screenAngle;last=now;
@@ -22,7 +30,7 @@ const TiltInput = (() => {
       roll+=(axis(latest.roll-baseline.roll)-roll)*t;pull+=(axis(latest.pull-baseline.pull)-pull)*t;
       return {roll,pull,fresh:true};
     }
-    return {sample,recenter,reset,step};
+    return {sample,sampleGravity,recenter,reset,step};
   }
   return {create};
 })();

@@ -56,7 +56,7 @@ const ENV_MIPS: f32 = ${GAtmos.ENV_MIPS}.0;
 fn ssr(P: vec3f, R: vec3f, px: vec2f) -> vec4f {
   if (R.y <= 0.0) { return vec4f(0.0); }
   let dimf = vec2f(textureDimensions(gD));
-  var t = 1.5 + 2.0 * ign(px + f32(F.frame % 8u) * 3.1);
+  var t = 2.0; // stable ray start: no frame-random reflection sparkle
   var prevT = 0.0;
   let camD = distance(P, F.camPos);
   for (var i = 0; i < 36; i++) {
@@ -89,7 +89,7 @@ fn ssr(P: vec3f, R: vec3f, px: vec2f) -> vec4f {
       let expectedDepth=log2(1.0+1.0/max(pc.z/pc.w,1e-7));
       if(abs(previous.a-expectedDepth)>.14){return vec4f(0.0);}
       let motion=length((pu-uh)*F.res);
-      let confidence=(1.0-smoothstep(1.0,8.0,motion))*.35;
+      let confidence=(1.0-smoothstep(1.0,8.0,motion))*.65;
       return vec4f(previous.rgb, edge * confidence * (1.0 - f32(i) / 36.0 * 0.3));
     }
     prevT = t;

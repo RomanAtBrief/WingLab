@@ -3,8 +3,8 @@ const GTrees = (() => {
   const T = THREE;
   const MAXM = 24000, MAXI = 120000, RINGS = 5, GRIDN = 128;
   // per place: density, share of conifers, tree height range (m)
-  const SPECIES = { islands: [0.0, 0.0, 9, 19], canyon: [0.85, 0.28, 2.2, 6.5] };
-  let d, frameBuf, R = {}, P = {}, BG = {}, on = true, placeKey = null;
+  const SPECIES = { islands: [0.94, 0.0, 7, 17], canyon: [0.85, 0.28, 2.2, 6.5] };
+  let d, frameBuf, R = {}, P = {}, BG = {}, on = true, quality = 1, placeKey = null;
 
   function mkMesh(kind) {   // unit-height tree: uv.x = 0 trunk, 1 foliage
     const parts = [];
@@ -80,7 +80,7 @@ fn Hs(uv: vec2f) -> f32 {
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= ${GRIDN}u || gid.y >= ${GRIDN}u) { return; }
-  let ring = gid.z; let cs = 8.0 * f32(1u << ring);
+  let ring = gid.z; let cs = select(6.0,8.0,F.place==1u) * f32(1u << ring);
   let rel = vec2i(gid.xy) - vec2i(${GRIDN / 2});
   if (ring > 0u && abs(rel.x) < ${GRIDN / 4} && abs(rel.y) < ${GRIDN / 4}) { return; }
   let camW = TV.xy;                        // world xz of the camera
@@ -90,12 +90,12 @@ fn Hs(uv: vec2f) -> f32 {
   let uv = wxz / F.tile;
   let m = textureLoad(mat, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(mat, 0)))), i32(textureDimensions(mat, 0).x)), 0);
   let fa = textureLoad(alb, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(alb, 0)))), i32(textureDimensions(alb, 0).x)), 0).a;
-  let dens = smoothstep(0.12, 0.65, m.b) * (1.0 - m.a) * (1.0 - m.r) * (1.0 - fa) * TU.x;
+  let dens = smoothstep(0.12, 0.65, m.b) * (1.0 - m.a) * (1.0 - m.r * 0.8) * (1.0 - fa) * TU.x;
   if (h3 > dens * 0.95) { return; }
   let gh = Hs(fract(uv));
   if (gh < F.water + 1.5) { return; }
   let nn = textureLoad(nrm, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(nrm, 0)))), i32(textureDimensions(nrm, 0).x)), 0).xyz;
-  if (nn.y < 0.72) { return; }
+  if (nn.y < select(0.48,0.68,F.place==1u)) { return; }
   let conifer = gh > 180.0 && hash2i(cell * 29 + vec2i(3, 3)) < TU.y;
   var ht = mix(TU.z, TU.w, pow(hash2i(cell * 17 + vec2i(1, 9)), 0.8)) * (1.0 + 0.12 * f32(ring));
   let P = vec3f(wxz.x - camW.x + F.camPos.x, gh - F.planeAlt, wxz.y - camW.y + F.camPos.z);
@@ -110,7 +110,7 @@ fn Hs(uv: vec2f) -> f32 {
   let seed = hash2i(cell * 41 + vec2i(7, 1));
   let data = vec4f(Pc, ht);
   let extra = vec4f(select(0.0, 1.0, conifer), seed, dist, 0.0);
-  if (dist < 650.0) {
+  if (dist < ${G.S.lite?300:500}.0) {
     if (conifer) { let k = atomicAdd(&args[1], 1u); if (k < ${MAXM}u) { iC[k * 2u] = data; iC[k * 2u + 1u] = extra; } }
     else { let k = atomicAdd(&args[6], 1u); if (k < ${MAXM}u) { iB[k * 2u] = data; iB[k * 2u + 1u] = extra; } }
   } else {
@@ -228,7 +228,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
       if (!on || !GTerrain.ready || !placeKey) return;
       if (!BG.place) bindAll();
       const sp = SPECIES[placeKey] || SPECIES.islands, q = GTerrain.q, tile = GTerrain.place.tile;
-      d.queue.writeBuffer(R.u, 0, new Float32Array([sp[0], sp[1], sp[2], sp[3]]));
+      d.queue.writeBuffer(R.u, 0, new Float32Array([sp[0]*quality, sp[1], sp[2], sp[3]]));
       const cx = o.camera.position.x + q.wx, cz = o.camera.position.z + q.wz;
       tv[0] = ((cx % tile) + tile) % tile; tv[1] = ((cz % tile) + tile) % tile;
       d.queue.writeBuffer(R.tv, 0, tv);
@@ -255,5 +255,5 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
     pass.setPipeline(P.shadow);
     [[1, 0], [0, 20]].forEach(([k, off]) => { const m = R.mesh[k]; pass.setBindGroup(0, shBG[key][k]); pass.setVertexBuffer(0, m.pos); pass.setIndexBuffer(m.idx, 'uint32'); pass.drawIndexedIndirect(R.args, off); });
   }
-  return { init, setPlace, hook, drawShadow, set on(v) { on = v; } };
+  return { init, setPlace, hook, drawShadow, set on(v) { on = v; },set quality(v){quality=v;} };
 })();

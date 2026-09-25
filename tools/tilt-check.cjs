@@ -8,3 +8,13 @@ t.sample(50,20,90,510);assert.equal(t.step(.1,520).roll,0,'rotation recenters');
 assert.equal(t.sample(null,10,0,1300),false,'missing sensor values rejected');t.reset();assert.equal(t.step(.1,1400).fresh,false);
 const upright=make();upright.sample(90,0,0,0);upright.sample(80,90,0,20);let u;for(let i=0;i<20;i++)u=upright.step(.025,20+i*25);assert(u.roll>.2&&u.roll<.5,'upright phone has proportional roll, not a saturated jump');
 console.log('Tilt checks passed: portrait, both landscapes, dead zone, smoothing, recenter, rotation, stale input, absent sensor and reset.');
+// iOS motion-only devices: gravity fallback must steer after calibration.
+const gravity=make();
+assert(gravity.sampleGravity(0,-6,-7.5,0,0));
+assert(!gravity.sampleGravity(null,-6,-7.5,0,1));
+gravity.sampleGravity(4,-6,-7.5,0,100);
+let gv;for(let i=0;i<30;i++)gv=gravity.step(1/60,100+i*10);
+assert(gv.roll>.3,'accelerometer gravity fallback responds to sideways tilt');
+gravity.recenter();for(let i=0;i<30;i++)gv=gravity.step(1/60,400+i*3);
+assert(Math.abs(gv.roll)<.02,'gravity fallback can be recentered');
+console.log('Accelerometer-only fallback and recenter checks passed.');

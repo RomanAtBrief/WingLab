@@ -130,3 +130,5 @@ Navigation is an assisted flight-game model, separate from the aerodynamic lesso
 ## Licenses
 
 Original application code is covered by the repository LICENSE. Third-party libraries, font, textures and supplied scene photos have separate terms; see [asset attribution](../assets/ATTRIBUTION.md).
+
+For the physical-iPhone feedback follow-up, root causes, rendering research and test limits, see [Rendering notes](RENDERING-NOTES.md). Run `node tools/startup-check.cjs` to check renderer recovery.

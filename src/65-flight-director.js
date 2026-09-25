@@ -4,12 +4,12 @@ const FlightDirector = (() => {
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),mix=(a,b,t)=>a+(b-a)*t;
   const angle=a=>Math.atan2(Math.sin(a),Math.cos(a));
   const state={mode:'auto',x:0,z:0,alt:1000,heading:0,bank:0,pitch:0,speed:40,verticalSpeed:0,rollRate:0,pitchRate:0,aileron:0,elevator:0,rudder:0,throttle:.8,phase:'Cloud cruise',clearance:false,elapsed:0};
-  const stick={roll:0,pull:0};const keys=new Set();let route=[],target=0,place='',ready=false,requestedAlt=1000,altitudeTarget=false,lap=0;
+  const stick={roll:0,pull:0};const keys=new Set();let route=[],target=0,place='',ready=false,requestedAlt=1000,altitudeTarget=false,lap=0,autoTurn=0;
   function configure(name,points,alt){
     if(!points||points.length<2)return;
-    route=points;place=name;target=1;lap=0;Object.assign(state,{x:points[0].x,z:points[0].z,alt,heading:Math.atan2(points[1].z-points[0].z,points[1].x-points[0].x),bank:0,pitch:0,rollRate:0,pitchRate:0,aileron:0,elevator:0,rudder:0,verticalSpeed:0,elapsed:0});requestedAlt=alt;altitudeTarget=false;ready=true;keys.clear();
+    route=points;place=name;target=1;lap=0;autoTurn=0;Object.assign(state,{x:points[0].x,z:points[0].z,alt,heading:Math.atan2(points[1].z-points[0].z,points[1].x-points[0].x),bank:0,pitch:0,rollRate:0,pitchRate:0,aileron:0,elevator:0,rudder:0,verticalSpeed:0,elapsed:0});requestedAlt=alt;altitudeTarget=false;ready=true;keys.clear();
   }
-  function setMode(mode){if(mode!=='auto'&&mode!=='manual')return;state.mode=mode;state.phase=mode==='manual'?'Manual flight':'Joining scenic route';clearKeys();requestedAlt=state.alt;altitudeTarget=false;
+  function setMode(mode){if(mode!=='auto'&&mode!=='manual')return;state.mode=mode;autoTurn=9.81*Math.tan(state.bank)/Math.max(state.speed,18);state.phase=mode==='manual'?'Manual flight':'Joining scenic route';clearKeys();requestedAlt=state.alt;altitudeTarget=false;
     if(mode==='auto'&&route.length){let best=Infinity,bestIndex=0,bestLap=lap;
       for(const l of route.periodX?[lap-1,lap,lap+1]:[0])route.forEach((p,i)=>{const d=(p.x+l*(route.periodX||0)-state.x)**2+(p.z-state.z)**2;if(d<best){best=d;bestIndex=i;bestLap=l;}});
       target=(bestIndex+2)%route.length;lap=bestLap+(bestIndex+2>=route.length?1:0);
@@ -37,13 +37,22 @@ const FlightDirector = (() => {
     dt=Math.min(dt,.15);state.elapsed+=dt;const oldAlt=state.alt,oldBank=state.bank,oldPitch=state.pitch;
     let turn=0,goalAlt=requestedAlt,rollEffort=0,pitchEffort=0;
     if(state.mode==='auto'){
-      state.speed=mix(state.speed,clamp(airspeed*.32,22,place==='canyon'?38:48),1-Math.exp(-dt*1.2));
-      let p=waypoint(),dist=Math.hypot(p.x-state.x,p.z-state.z);
-      for(let j=0;j<route.length&&dist<Math.max(48,state.speed*1.8);j++){target=(target+1)%route.length;if(target===0)lap++;p=waypoint();dist=Math.hypot(p.x-state.x,p.z-state.z);}
-      const aim=Math.atan2(p.z-state.z,p.x-state.x),error=angle(aim-state.heading);
-      turn=clamp(error*.8,-.32,.32);
-      const bankTarget=clamp(turn*1.4,-.44,.44);
-      rollEffort=clamp((bankTarget-state.bank)*3,-1,1);state.bank=mix(state.bank,bankTarget,1-Math.exp(-dt*2.8));
+      state.speed=mix(state.speed,clamp(airspeed*.32,22,place==='canyon'?28:48),1-Math.exp(-dt*1.2));
+      // Continuous look-ahead along the river. Advancing a point must not
+      // instantaneously swing the nose toward the next discrete waypoint.
+      for(let j=0;j<route.length;j++){
+        const p=waypoint(),pi=(target+route.length-1)%route.length,prev=route[pi];
+        const px=prev.x+(lap-(target===0?1:0))*(route.periodX||0),dx=p.x-px,dz=p.z-prev.z;
+        if(Math.hypot(p.x-state.x,p.z-state.z)>8&&(state.x-p.x)*dx+(state.z-p.z)*dz<0)break;
+        target=(target+1)%route.length;if(target===0)lap++;
+      }
+      const look=routeAhead(Math.max(45,state.speed*2.2));
+      const aim=Math.atan2(look.z-state.z,look.x-state.x),error=angle(aim-state.heading);
+      const distance=Math.max(20,Math.hypot(look.x-state.x,look.z-state.z));
+      const desiredTurn=clamp(2*state.speed*Math.sin(error)/distance,-.30,.30);
+      autoTurn=mix(autoTurn,desiredTurn,1-Math.exp(-dt*2.2));turn=autoTurn;
+      const bankTarget=clamp(Math.atan2(turn*state.speed,9.81),-.44,.44);
+      rollEffort=clamp((bankTarget-state.bank)*3,-1,1);state.bank=mix(state.bank,bankTarget,1-Math.exp(-dt*2.0));
       if(place==='canyon'){goalAlt=105+18*Math.sin(state.elapsed*.028);state.phase='River canyon';}
       else{const q=Math.sin(state.elapsed*Math.PI*2/210+1.2),v=clamp((q+.25)/.95,0,1),smooth=v*v*(3-2*v);goalAlt=145+2850*smooth;state.phase=state.alt>2780?'Above the cloud tops':state.alt>850?'Through the clouds':state.alt<350?'Island channels':goalAlt<state.alt?'Coastal descent':'Climbing to cloud';}
     }else{

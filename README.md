@@ -18,7 +18,7 @@ Free to explore in your browser. No download or account needed.
 
 ## Take the controls
 
-Let **Autopilot** take you on a scenic tour, or switch to **Manual** and fly your own route. A small guide appears on screen.
+Let **Autopilot** take you on a scenic tour, or switch to **Manual** and fly your own route. Tap the round flight-mode button at the top right to switch modes. A small guide appears on screen.
 
 | Keys | What happens |
 | --- | --- |

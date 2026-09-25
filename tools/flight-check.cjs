@@ -39,3 +39,12 @@ assert(highest<150,'river-following clearance stays inside a tight canyon instea
 f=fresh();f.configure('islands',route,1500);f.setMode('manual');f.key('ArrowDown',true);for(let i=0;i<10*30;i++)f.step(1/30,105,12);assert(f.state.alt<1200,'held dive loses at least 300m in 10 seconds');
 f.clearKeys();f.setStick(.7,-.5);for(let i=0;i<90;i++)f.step(1/30,105,12);assert(f.state.bank>.4&&f.state.pitch<-.2,'analog tilt controls bank and pitch');f.clearKeys();for(let i=0;i<180;i++)f.step(1/30,105,12);assert(Math.abs(f.state.bank)<.01,'clearing input also releases the stick');
 console.log(`Tight canyon clearance passed (max altitude ${highest.toFixed(1)}m), faster descent and analog stick release passed.`);
+
+// Steering stays continuous across discrete river samples (including wrap).
+f=fresh();f.configure('canyon',actual,150);let previousHeading=f.state.heading,previousYaw=0,maxYawAcceleration=0;
+for(let i=0;i<600*30;i++){
+ f.step(1/30,105,12);const yaw=Math.atan2(Math.sin(f.state.heading-previousHeading),Math.cos(f.state.heading-previousHeading))*30;
+ maxYawAcceleration=Math.max(maxYawAcceleration,Math.abs(yaw-previousYaw)*30);previousYaw=yaw;previousHeading=f.state.heading;
+}
+assert(maxYawAcceleration<.7,`river yaw acceleration is bounded: ${maxYawAcceleration}`);
+console.log(`Continuous river steering: peak yaw acceleration ${maxYawAcceleration.toFixed(3)} rad/s².`);
