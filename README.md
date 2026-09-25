@@ -28,7 +28,9 @@ Let **Autopilot** take you on a scenic tour, or switch to **Manual** and fly you
 | P | Switch Autopilot / Manual |
 | 3 | Look from behind the aircraft |
 
-Release the arrows to ease back into level flight. Drag to orbit the camera; scroll to zoom. Touch controls are available too.
+Release the arrows to ease back into level flight. Drag to orbit the camera; scroll to zoom. On iPhone or iPad, use the touch arrows or choose **Manual → Enable tilt** and hold your device comfortably. Tap **Recenter** whenever you want a new level position.
+
+Want to investigate? Open **More → Flight controls** or **Analysis charts** on your phone. Panels and 3D force arrows start hidden; turn the arrows on in **Overlays**.
 
 ![A Stearman biplane exploring the canyon and its river](docs/screenshots/canyon-flight.jpg)
 

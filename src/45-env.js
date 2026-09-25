@@ -232,9 +232,9 @@ const EnvGL = (() => {
       else if (uEnv == 2) { c = mix(vec3(0.16, 0.24, 0.09), vec3(0.3, 0.29, 0.27), smoothstep(900.0, 1800.0, h + nz * 300.0));
         c = mix(c, vec3(0.26, 0.25, 0.24), smoothstep(0.3, 0.5, steep));
         float snow = smoothstep(2300.0, 2700.0, h + nz * 500.0) * smoothstep(0.45, 0.3, steep); c = mix(c, vec3(0.92, 0.94, 0.98), snow); }
-      else { c=mix(vec3(.65,.40,.23),vec3(.82,.57,.36),nz);
+      else { c=mix(vec3(.53,.45,.39),vec3(.70,.61,.50),nz);
         float grain=fbm(vec2(p.x+p.z,h)*.22,4),bed=pow(.5+.5*sin(h*1.6+fbm(p.xz/40.0,3)*2.0),10.0);
-        c*=.72+.44*grain-.15*bed;c=mix(c,vec3(.76,.65,.44),smoothstep(12.0,2.0,h)); }
+        c*=.72+.44*grain-.15*bed;c=mix(c,vec3(.71,.65,.54),smoothstep(12.0,2.0,h)); }
       c = mix(c, vec3(0.9, 0.92, 0.96), uSnow * smoothstep(0.5, 0.25, steep));
       return c * (1.0 - 0.35 * uWet);
     }

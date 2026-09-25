@@ -5,7 +5,7 @@ const Scene3DGL = (() => {
   const holder = new T.Group(), pitch = new T.Group(), flowGroup = new T.Group(), arrowGroup = new T.Group();
   const cam = { az: -0.7, el: 0.22, d: 1, taz: -0.7, tel: 0.22, td: 1 };
   const vis = { alpha: 0, CL: 0.4, stalled: false, sepX: 1, V: 50, h: 1000, thr: 0.8, ab: false, L: 1, W: 1, T: 0, D: 0.1, extended: true };
-  const show = { forces: true, flow: true };
+  const show = { forces: false, flow: true };
   let flow = null, precip = null, arrows = {}, labels = {}, time = 0, viewName = '34', size = 10, paused = false;
   const perf = { acc: 0, n: 0, scale: 0.6 };
   let insets = { l: 16, r: 16, b: 88, t: 136 };
@@ -238,7 +238,7 @@ const Scene3DGL = (() => {
     const safeW=Math.max(120,bounds.width-framing.l-framing.r-64),safeH=Math.max(100,bounds.height-framing.t-framing.b-56);
     camera.setViewOffset(bounds.width,bounds.height,(framing.r-framing.l)/2,(framing.b-framing.t)/2,bounds.width,bounds.height);
     const vf=Math.tan(camera.fov*Math.PI/360),fit=Math.max(bounds.height/safeH,bounds.width/(safeW*camera.aspect));
-    const D=size*(bounds.width<600?.43:.34)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
+    const D=size*(bounds.width<600?.43:.52)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
     camera.position.set(D * Math.cos(cam.el) * Math.cos(cam.az), D * Math.sin(cam.el), D * Math.cos(cam.el) * Math.sin(cam.az));
     camera.position.applyAxisAngle(new T.Vector3(0,1,0),-nav.heading);holder.rotation.y=-nav.heading;arrowGroup.rotation.y=-nav.heading;
     camera.lookAt(0, size * 0.02, 0);

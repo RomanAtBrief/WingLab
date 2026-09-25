@@ -55,7 +55,7 @@ const Scene3DGPU = (() => {
   holder.add(pitch); pitch.add(flowGroup);
   const cam = { az: -2.1, el: 0.48, d: 1, taz: -2.1, tel: 0.48, td: 1 };
   const vis = { alpha: 0, CL: 0.4, stalled: false, sepX: 1, V: 50, h: 1000, thr: 0.8, ab: false, L: 1, W: 1, T: 0, D: 0.1, extended: true };
-  const show = { forces: true, flow: true, weather: true };
+  const show = { forces: false, flow: true, weather: true };
   let arrows = {}, labels = {}, time = 0, viewName = '34', size = 10, paused = false;
   let insets = { l: 16, r: 16, b: 88, t: 136 };
   const framing={l:16,r:16,b:88,t:136};
@@ -318,6 +318,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     GTerrain.init(GR.frameBuf); GR.addHook(GTerrain.hook);
     GShadow.init(); GR.addHook(GShadow.hook);
     GTrees.init(GR.frameBuf); GR.addHook(GTrees.hook);
+    GWaterfalls.init();GR.addHook(GWaterfalls.hook);
     GClouds.init(GR.frameBuf); GR.addHook(GClouds.hook);
     GPost.init(GR.frameBuf); GR.addHook(GPost.hook);
     initOverlay(); initTrails(); initAerosols();
@@ -402,7 +403,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const safeW=Math.max(120,bounds.width-framing.l-framing.r-64),safeH=Math.max(100,bounds.height-framing.t-framing.b-56);
     camera.setViewOffset(bounds.width,bounds.height,(framing.r-framing.l)/2,(framing.b-framing.t)/2,bounds.width,bounds.height);
     const vf=Math.tan(camera.fov*Math.PI/360),fit=Math.max(bounds.height/safeH,bounds.width/(safeW*camera.aspect));
-    const D=size*(bounds.width<600?.43:.34)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
+    const D=size*(bounds.width<600?.43:.52)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
     camera.position.set(D * Math.cos(cam.el) * Math.cos(cam.az), D * Math.sin(cam.el), D * Math.cos(cam.el) * Math.sin(cam.az));
     // world: the aircraft flies along +x; the ground scrolls underneath
     const TP = GTerrain.PLACES[EnvGPU.state.place];
@@ -471,6 +472,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const vp = GR.projRZ(camera, new T.Matrix4(), 0, 0).multiply(camera.matrixWorldInverse);
     updateTrails(alt, env);
     aerosolOn=show.flow&&show.weather&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
+    host.dataset.cascades=String(GWaterfalls.count);
     GTerrain.update({ worldX: world.x, worldZ: world.z, env }, camera, vp);
     GShadow.update(camera, size, alt - Math.max(ground, TP.water), env.sunDir, alt);
     envTimer -= dt;

@@ -3,7 +3,7 @@ const GTrees = (() => {
   const T = THREE;
   const MAXM = 24000, MAXI = 120000, RINGS = 5, GRIDN = 128;
   // per place: density, share of conifers, tree height range (m)
-  const SPECIES = { islands: [0.0, 0.0, 9, 19], canyon: [0.6, 0.45, 3, 8] };
+  const SPECIES = { islands: [0.0, 0.0, 9, 19], canyon: [0.85, 0.28, 2.2, 6.5] };
   let d, frameBuf, R = {}, P = {}, BG = {}, on = true, placeKey = null;
 
   function mkMesh(kind) {   // unit-height tree: uv.x = 0 trunk, 1 foliage
@@ -18,10 +18,19 @@ const GTrees = (() => {
         parts.push([c, 1]);
       }
     } else {       // broadleaf: lumpy crown
-      const s = new T.IcosahedronGeometry(0.34, 2); s.scale(1, 0.85, 1); s.translate(0, 0.62, 0);
-      const p = s.attributes.position;
-      for (let k = 0; k < p.count; k++) { const x = p.getX(k), y = p.getY(k) - 0.62, z = p.getZ(k); const n = 1 + 0.13 * Math.sin(x * 19 + y * 7) * Math.cos(z * 17 - y * 11) + 0.08 * Math.sin(x * 41 + z * 37); p.setXYZ(k, x * n, 0.62 + y * n, z * n); }
-      parts.push([s, 1]);
+      // Overlapping uneven crowns avoid the single ball-on-a-stick silhouette.
+      for(let j=0;j<7;j++){
+        const angle=j*2.39996,ring=j===0?0:.18,cy=.53+(j%3)*.10;
+        const crown=new T.IcosahedronGeometry(j===0?.25:.20,1);
+        crown.scale(1,.8+(j%2)*.18,1);
+        const p=crown.attributes.position;
+        for(let k=0;k<p.count;k++){
+          const x=p.getX(k),y=p.getY(k),z=p.getZ(k);
+          const n=1+.16*Math.sin(x*39+y*29+j)*Math.cos(z*33-y*19);
+          p.setXYZ(k,x*n+Math.cos(angle)*ring,y*n+cy,z*n+Math.sin(angle)*ring);
+        }
+        parts.push([crown,1]);
+      }
     }
     const pos = [], nrm = [], uv = [], idx = []; let base = 0;
     for (const [g0, part] of parts) {
@@ -81,13 +90,13 @@ fn Hs(uv: vec2f) -> f32 {
   let uv = wxz / F.tile;
   let m = textureLoad(mat, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(mat, 0)))), i32(textureDimensions(mat, 0).x)), 0);
   let fa = textureLoad(alb, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(alb, 0)))), i32(textureDimensions(alb, 0).x)), 0).a;
-  let dens = smoothstep(0.25, 0.7, m.b) * (1.0 - m.a) * (1.0 - m.r) * (1.0 - fa) * TU.x;
+  let dens = smoothstep(0.12, 0.65, m.b) * (1.0 - m.a) * (1.0 - m.r) * (1.0 - fa) * TU.x;
   if (h3 > dens * 0.95) { return; }
   let gh = Hs(fract(uv));
   if (gh < F.water + 1.5) { return; }
   let nn = textureLoad(nrm, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(nrm, 0)))), i32(textureDimensions(nrm, 0).x)), 0).xyz;
-  if (nn.y < 0.78) { return; }
-  let conifer = hash2i(cell * 29 + vec2i(3, 3)) < TU.y;
+  if (nn.y < 0.72) { return; }
+  let conifer = gh > 180.0 && hash2i(cell * 29 + vec2i(3, 3)) < TU.y;
   var ht = mix(TU.z, TU.w, pow(hash2i(cell * 17 + vec2i(1, 9)), 0.8)) * (1.0 + 0.12 * f32(ring));
   let P = vec3f(wxz.x - camW.x + F.camPos.x, gh - F.planeAlt, wxz.y - camW.y + F.camPos.z);
   let dd = P.xz - F.camPos.xz;
@@ -118,7 +127,7 @@ fn Hs(uv: vec2f) -> f32 {
 fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
 fn leafCol(conifer: bool, seed: f32) -> vec3f {
   var c = lin(vec3f(0.21, 0.35, 0.09));                                                      // tropical broadleaf
-  if (F.place == 1u) { c = select(lin(vec3f(0.27, 0.32, 0.14)), lin(vec3f(0.22, 0.26, 0.17)), conifer); }   // tamarisk / juniper
+  if (F.place == 1u) { c = select(lin(vec3f(0.26, 0.32, 0.20)), lin(vec3f(0.22, 0.27, 0.20)), conifer); }   // tamarisk / juniper
   let v = fract(seed * 7.13);
   c *= 0.75 + 0.5 * v; c = mix(c, c * vec3f(1.15, 1.0, 0.8), fract(seed * 3.7));
   return c;

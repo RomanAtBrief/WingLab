@@ -308,6 +308,52 @@ input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to r
 .pilot-hint[data-manual="true"]{display:grid;grid-template-columns:1fr;gap:.4rem;width:15rem;padding:.75rem .85rem;border:1px solid rgba(255,255,255,.42);background:color-mix(in srgb,var(--solid-bg) 55%,transparent);backdrop-filter:blur(12px);box-shadow:0 5px 20px rgba(0,0,0,.08)}
 .pilot-hint[data-manual="true"] #pilotHelp{font-size:.69rem}.manual-guide{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:.35rem .6rem;font-size:.73rem}.guide-keys{display:flex;gap:.22rem}.guide-keys kbd{font-family:inherit;font-size:.72rem;line-height:1.3;font-weight:600;min-width:1.6rem;min-height:1.45rem;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--separator);border-bottom-width:2px;border-radius:.3rem;background:color-mix(in srgb,var(--solid-bg) 74%,transparent);color:var(--label)}.guide-keys kbd.active{background:var(--label);color:var(--solid-bg)}.flight-readout{grid-column:1/-1;border-top:1px solid var(--separator);padding-top:.45rem;margin-top:.1rem;color:var(--label-2);font-variant-numeric:tabular-nums}
 @media(max-width:599px){.pilot-hint[data-manual="true"]{width:13.7rem;padding:.55rem .65rem}.manual-guide{gap:.25rem .45rem;font-size:.69rem}.pilot-hint[data-manual="true"] .flight-pad{flex-wrap:wrap}.flight-pad button{width:2.75rem}.guide-keys kbd{min-height:1.25rem}}
+
+/* Dismissible, safe-area-aware sheets. Keep the flight view clean on first load. */
+html,body,.app{height:100%;height:100dvh;overflow:hidden;overscroll-behavior:none}
+.app{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input[type=number],textarea{-webkit-user-select:text;user-select:text;touch-action:manipulation}
+button,a,select{touch-action:manipulation}input[type=range],#viewport canvas{touch-action:none}
+.scroll,.pop,.analysis-body{overscroll-behavior:contain;touch-action:pan-y}
+.sheet-title{display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem 0 1rem;font-size:var(--text-footnote);color:var(--label-2);flex:none}
+.inspector-header{padding-top:.25rem}.panel,.drawer{overflow:hidden;bottom:max(1rem,env(safe-area-inset-bottom))}
+.toolbar{left:max(1rem,env(safe-area-inset-left));right:max(1rem,env(safe-area-inset-right))}
+.menu>button.x{width:var(--hit);padding:0;justify-content:center}.pop h3{padding-right:2.75rem;min-height:2rem;display:flex;align-items:center;gap:.5rem}
+.infocard{max-height:calc(100dvh - 7rem - env(safe-area-inset-bottom));overflow:auto}.infocard h4{padding-right:2rem}
+.motion-controls{display:none;gap:.4rem;flex-wrap:wrap}.motion-controls p{width:100%;font-size:var(--text-caption);line-height:1.4;color:var(--label-2)}
+.motion-controls .btn{min-height:2.75rem;padding:.4rem .75rem}.motion-controls button[aria-pressed=true]{background:var(--label);color:var(--solid-bg)}
+@media(pointer:coarse),(max-width:1023px){
+  .motion-controls{display:flex}.manual-guide{display:none}.flight-pad:not([hidden]){display:grid;grid-template-columns:repeat(6,1fr);gap:.25rem}.flight-pad button{width:100%;min-width:2.75rem;min-height:2.75rem}
+  .pilot-hint[data-manual=true]{width:min(20rem,calc(100vw - 2rem));padding:.65rem .75rem;font-size:var(--text-footnote);top:auto;bottom:max(1rem,env(safe-area-inset-bottom))}
+  .pilot-hint[data-manual=true] #pilotHelp{font-size:var(--text-caption)}
+  .pilot-hint:has(~.panel[data-open=true]),.app:has(.drawer:not([hidden])) .pilot-hint{display:none}
+  .tb-btn,.tb-btn.icon,.seg button,.info{min-width:2.75rem;min-height:2.75rem}.status{min-height:2.75rem}
+}
+@media(max-width:1023px){#chartsBtn{display:none}.panel.right{bottom:max(1rem,env(safe-area-inset-bottom))}.pop{max-height:calc(100dvh - 6rem - env(safe-area-inset-bottom))}}
+@media(max-width:599px){
+  .toolbar{gap:.25rem}.tb-group{height:3.25rem}.tb-ac{max-width:calc(100vw - 12rem)}.tb-ac span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tb-ac{padding-left:.5rem;padding-right:.35rem}
+  .panel.right,.panel.left{left:max(1rem,env(safe-area-inset-left));right:max(1rem,env(safe-area-inset-right));top:auto;bottom:max(1rem,env(safe-area-inset-bottom));width:auto;height:min(65dvh,36rem);min-height:0;border-radius:var(--radius-panel)}
+  .drawer[data-open=true]{height:65dvh;min-height:0;max-height:calc(100dvh - 6rem - env(safe-area-inset-bottom))}.drawer[data-focus=true]{top:5.75rem;height:auto;max-height:none}
+  .drawer .analysis-header{flex-wrap:wrap;gap:.25rem}#chartPicker{flex-basis:100%}.analysis-actions{width:100%;justify-content:flex-end}#showData{display:block;margin-right:auto}.mobile-tabs{display:none}
+  .panel.right .inspector-header{padding:.25rem .5rem .5rem}.inspector-header .seg button{font-size:.6875rem;padding:0 .2rem;min-width:0}
+  .pop .acgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.accard{min-width:0}.pop .x{min-width:2.75rem;min-height:2.75rem}
+  .status{top:5.5rem}.status b,.status small{font-size:var(--text-caption)}
+}
+@media(max-height:499px) and (max-width:1023px){
+  .panel.right,.panel.left,.drawer[data-open=true]{left:auto!important;right:max(1rem,env(safe-area-inset-right))!important;width:min(22.5rem,calc(100vw - 2rem));top:5rem;bottom:max(1rem,env(safe-area-inset-bottom));height:auto!important;min-height:0;max-height:none;border-radius:var(--radius-panel)}
+  .pilot-hint[data-manual=true]{max-width:20rem}.status{max-width:calc(100vw - 2rem)}
+}
+.infocard .real{background:none;border-radius:0;padding:.5rem 0 0}.infocard .real b{text-transform:none;letter-spacing:0;font-size:var(--text-caption)}.infocard .help-note{font:inherit;font-size:var(--text-footnote);line-height:1.5}
+#chartSelect{display:none}.inspector-handle{display:none;border:0;padding:0}
+@media(max-width:599px){
+  .mobile-tabs{display:flex;order:3;flex:none;margin:.5rem .75rem .75rem}.mobile-tabs button{font-size:var(--text-caption);min-height:2.75rem}
+  .panel.right .scroll{min-height:0;flex:1}.panel.right[data-expanded=true]{height:calc(100dvh - 6rem - env(safe-area-inset-bottom))}
+  .inspector-handle{display:block;position:relative;flex:none;width:4rem;min-height:1.5rem;height:1.5rem;margin:0 auto;background:none;touch-action:none}.inspector-handle:after{content:'';position:absolute;left:.875rem;top:.7rem;width:2.25rem;height:.3125rem;background:var(--separator);border-radius:var(--radius-capsule)}
+  .sheet-title{padding-top:0}.drawer #chartPicker{display:none}#chartSelect{display:block;min-height:2.75rem;max-width:6.5rem;font:inherit;color:var(--label);background:var(--fill);border:0;border-radius:var(--radius-capsule);padding:0 .6rem}.analysis-actions{width:auto;flex:1}.drawer .analysis-header{flex-wrap:nowrap}
+}
+@media(max-width:599px){#timeSeg button{min-width:0;flex:1;display:flex;flex-direction:column;gap:.25rem;padding:.4rem .1rem;font-size:var(--text-caption)}#timeSeg button span{white-space:normal;text-align:center}#timeSeg{width:100%}}
+@media(max-width:359px){.flight-pad:not([hidden]){grid-template-columns:repeat(4,1fr)}.flight-pad button:nth-last-child(-n+2){grid-column:span 2}.pilot-hint[data-manual=true]{width:calc(100vw - 2rem)}}
+@media(pointer:coarse),(max-width:1023px){.ctl-h output{min-height:2.75rem;display:inline-flex;align-items:center;justify-content:flex-end;min-width:2.75rem}.inspector-handle{min-height:2.75rem;margin-bottom:-.75rem}}
 </style>
 </head>
 <body>
@@ -331,34 +377,34 @@ input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to r
       <button class="tb-btn pilot-btn" id="pilotBtn" type="button" aria-pressed="true" aria-label="Switch to manual flight" title="Autopilot / Manual (P)"><i data-icon="plane"></i><span id="pilotMode">Autopilot</span></button>
       <button class="tb-btn" id="envBtn" aria-label="Environment" title="Environment" type="button" aria-expanded="false" aria-haspopup="dialog"><i data-icon="cloudsun"></i><span id="envName" hidden>Islands</span></button>
       <button class="tb-btn icon" id="pauseBtn" type="button" aria-pressed="false" title="Pause" aria-label="Pause"><i data-icon="pause"></i></button>
-      <button class="tb-btn icon" id="flyBtn" type="button" aria-pressed="true" aria-label="Inspector" title="Inspector (I)"><i data-icon="panel-right"></i></button>
-      <button class="tb-btn icon" id="overlaysBtn" type="button" aria-label="Overlays" aria-expanded="false" title="Overlays"><i data-icon="layers"></i></button>
+      <button class="tb-btn icon" id="flyBtn" type="button" aria-pressed="false" aria-label="Inspector" title="Inspector (I)"><i data-icon="panel-right"></i></button>
+      <button class="tb-btn icon" id="chartsBtn" aria-label="Analysis charts" aria-pressed="false" title="Charts (C)"><i data-icon="glide"></i></button><button class="tb-btn icon" id="overlaysBtn" type="button" aria-label="Overlays" aria-expanded="false" title="Overlays"><i data-icon="layers"></i></button>
       <button class="tb-btn icon" id="moreBtn" type="button" aria-label="More" aria-expanded="false"><i data-icon="ellipsis"></i></button>
     </div>
   </header>
 
   <button type="button" class="status glass" id="status" aria-label="Flight status, open controls"><span class="dot"></span><b id="statusText">Flying level</b><small id="statusSub"></small></button>
-  <div class="pilot-hint glass" id="pilotHint"><span id="routePhase">Scenic autopilot</span><span id="pilotHelp">Relax and explore</span><div id="manualGuide" class="manual-guide" hidden aria-label="Manual flight keyboard guide"><div class="guide-keys"><kbd data-key="arrowleft">←</kbd><kbd data-key="arrowright">→</kbd></div><span>Bank &amp; turn</span><div class="guide-keys"><kbd data-key="arrowup">↑</kbd><kbd data-key="arrowdown">↓</kbd></div><span>Climb / dive</span><div class="guide-keys"><kbd data-key="w">W</kbd><kbd data-key="s">S</kbd></div><span>Throttle + / −</span><div class="guide-keys"><kbd>P</kbd><kbd>3</kbd></div><span>Autopilot / back view</span><div class="flight-readout" id="manualReadout">Ready to fly</div></div><div class="flight-pad" id="flightPad" hidden role="group" aria-label="Manual flight controls"><button data-flight-key="ArrowLeft" aria-label="Turn left">←</button><button data-flight-key="ArrowUp" aria-label="Climb">↑</button><button data-flight-key="ArrowDown" aria-label="Descend">↓</button><button data-flight-key="ArrowRight" aria-label="Turn right">→</button><button data-flight-key="s" aria-label="Decrease throttle">−</button><button data-flight-key="w" aria-label="Increase throttle">+</button></div></div>
-  <span id="liveStatus" class="sr-only" aria-live="polite"></span><ul id="forceSummary" class="sr-only"></ul>
+  <div class="pilot-hint glass" id="pilotHint"><span id="routePhase">Scenic autopilot</span><span id="pilotHelp">Relax and explore</span><div id="manualGuide" class="manual-guide" hidden aria-label="Manual flight keyboard guide"><div class="guide-keys"><kbd data-key="arrowleft">←</kbd><kbd data-key="arrowright">→</kbd></div><span>Bank &amp; turn</span><div class="guide-keys"><kbd data-key="arrowup">↑</kbd><kbd data-key="arrowdown">↓</kbd></div><span>Climb / dive</span><div class="guide-keys"><kbd data-key="w">W</kbd><kbd data-key="s">S</kbd></div><span>Throttle + / −</span><div class="guide-keys"><kbd>P</kbd><kbd>3</kbd></div><span>Autopilot / back view</span><div class="flight-readout" id="manualReadout">Ready to fly</div></div><div class="motion-controls"><button class="btn" id="tiltBtn" aria-pressed="false">Enable tilt</button><button class="btn" id="calibrateBtn" hidden>Recenter</button><p id="tiltStatus" role="status">Tilt to steer, or hold the arrows below.</p></div><div class="flight-pad" id="flightPad" hidden role="group" aria-label="Manual flight controls"><button data-flight-key="ArrowLeft" aria-label="Turn left">←</button><button data-flight-key="ArrowUp" aria-label="Climb">↑</button><button data-flight-key="ArrowDown" aria-label="Descend">↓</button><button data-flight-key="ArrowRight" aria-label="Turn right">→</button><button data-flight-key="s" aria-label="Decrease throttle">−</button><button data-flight-key="w" aria-label="Increase throttle">+</button></div></div>
+  <span id="liveStatus" class="sr-only" aria-live="polite"></span><ul id="forceSummary" class="sr-only" hidden></ul>
 
   <aside class="panel left glass" id="build" data-open="false" aria-label="Build">
     <div class="panel-h"><div><h2>Build</h2><p id="buildSub">Swap parts and see what changes</p></div><button class="tb-btn icon close" type="button" data-close="build" aria-label="Close"><i data-icon="xmark"></i></button></div>
     <div class="scroll" id="buildBody"></div>
   </aside>
 
-  <aside class="panel right glass" id="fly" data-open="true" aria-label="Fly">
-    <div class="inspector-header"><div class="seg full" id="inspectorTabs" role="tablist" aria-label="Inspector" tabindex="-1"><button id="tabControls" role="tab" aria-selected="true" aria-controls="paneControls" data-tab="Controls">Controls</button><button id="tabLimits" role="tab" aria-selected="false" aria-controls="paneLimits" data-tab="Limits">Limits</button><button id="tabStability" role="tab" aria-selected="false" aria-controls="paneStability" data-tab="Stability">Stability</button><button id="tabAircraft" role="tab" aria-selected="false" aria-controls="paneAircraft" data-tab="Aircraft">Aircraft</button></div></div>
+  <aside class="panel right glass" id="fly" data-open="false" aria-label="Fly">
+    <button class="sheet-handle inspector-handle" id="inspectorHandle" aria-label="Expand controls sheet"></button><div class="sheet-title"><span>Explore flight</span><button class="tb-btn icon" data-close="fly" aria-label="Close controls"><i data-icon="xmark"></i></button></div><div class="inspector-header"><div class="seg full" id="inspectorTabs" role="tablist" aria-label="Inspector" tabindex="-1"><button id="tabControls" role="tab" aria-selected="true" aria-controls="paneControls" data-tab="Controls">Controls</button><button id="tabLimits" role="tab" aria-selected="false" aria-controls="paneLimits" data-tab="Limits">Limits</button><button id="tabStability" role="tab" aria-selected="false" aria-controls="paneStability" data-tab="Stability">Stability</button><button id="tabAircraft" role="tab" aria-selected="false" aria-controls="paneAircraft" data-tab="Aircraft">Aircraft</button></div></div>
     <div class="scroll">
-      <section id="paneControls" class="grp tab-pane" role="tabpanel" aria-labelledby="tabControls" data-open="true"><h3 class="section-title">Flight <button class="info" data-info="speed" aria-label="About flight controls"></button></h3>
+      <section id="paneControls" class="grp tab-pane" role="tabpanel" aria-labelledby="tabControls" data-open="true"><h3 class="section-title">Flight <button class="info" data-info="flight" aria-label="About flight controls"></button></h3>
         <div class="grp-b" style="padding-top:6px">
           <div class="ctl"><div class="ctl-h"><label for="spd">Speed</label><output id="spdOut"></output></div><input type="range" id="spd" min="0" max="200" step="1"></div>
-          <div class="ctl"><div class="ctl-h"><label for="alt">Altitude</label><output id="altOut"></output></div><input type="range" id="alt" min="0" max="10000" step="100"></div>
+          <div class="ctl"><div class="ctl-h"><label for="alt" id="altLabel">Altitude</label><output id="altOut"></output></div><input type="range" id="alt" min="0" max="10000" step="100"><p id="altHint" class="hint" hidden></p></div>
           <div class="ctl" id="thrCtl"><div class="ctl-h"><label for="thr">Throttle</label><output id="thrOut"></output></div><input type="range" id="thr" min="0" max="1" step="0.05">
             <label class="toggle" id="abWrap" hidden>Afterburner <button class="info" data-info="afterburner" type="button" aria-label="About afterburner"></button><input type="checkbox" id="ab"></label>
             <label class="toggle" id="mastWrap" hidden>Engine out <button class="info" data-info="mast" type="button" aria-label="About the fold-away engine"></button><input type="checkbox" id="mast"></label></div>
-          <div class="ctl"><div class="ctl-h"><label for="aoa">Angle of attack</label><output id="aoaOut"></output></div>
+          <h3 class="section-title">Wing angle <button class="info" data-info="aoa" aria-label="About angle of attack"></button></h3><div class="ctl"><div class="ctl-h"><label for="aoa">Angle of attack</label><output id="aoaOut"></output></div>
             <div class="seg full" id="aoaSeg" role="group" aria-label="Angle of attack"><button type="button" data-m="auto" aria-pressed="true">Auto-Trim</button><button type="button" data-m="hand" aria-pressed="false">Manual</button></div>
-            <p class="hint" id="trimHint">Auto-trim finds the angle that balances lift and weight.</p><input type="range" id="aoa" min="-6" max="30" step="0.5" disabled></div>
+            <p class="hint" id="navHint">Autopilot flies the route. Sliders set lesson airspeed and power.</p><p class="hint" id="trimHint">Auto-trim finds the angle that balances lift and weight.</p><input type="range" id="aoa" min="-6" max="30" step="0.5" disabled></div>
         </div>
       </section>
       <section class="tab-pane" id="paneLimits" role="tabpanel" aria-labelledby="tabLimits" hidden><h3 class="section-title">Flight envelope <button class="info" data-info="stall" aria-label="About flight limits"></button></h3><div class="facts" id="facts"></div><button class="text-row" id="performanceBtn">All Performance Data <i data-icon="chevdown"></i></button><div id="moreGrp" hidden><button class="btn" id="performanceBack">Back to Limits</button><dl class="stats" id="stats"></dl></div></section>
@@ -367,10 +413,10 @@ input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to r
     </div>
   </aside>
 
-  <section class="drawer" id="drawer" data-open="true" aria-label="Analysis">
+  <section class="drawer" id="drawer" data-open="false" hidden aria-label="Analysis">
     <div class="sheet-handle" id="sheetHandle" aria-hidden="true"></div>
     <div class="mobile-tabs seg" id="mobileTabs"><button data-sheet="Controls">Controls</button><button data-sheet="Charts" aria-pressed="true">Charts</button><button data-sheet="Details">Details</button></div>
-    <div class="analysis-header"><div class="seg" id="chartPicker" role="tablist" aria-label="Analysis chart"><button role="tab" data-chart="Airflow" aria-selected="false">Airflow</button><button role="tab" data-chart="Lift" aria-selected="true">Lift</button><button role="tab" data-chart="Drag" aria-selected="false">Drag</button><button role="tab" data-chart="Forces" aria-selected="false">Forces</button></div><span id="drawerSub"></span><div class="analysis-actions"><button class="tb-btn" id="showData" aria-pressed="false">Show Data</button><button class="tb-btn icon" id="focusChart" aria-label="Focus chart" title="Focus (F)"><i data-icon="maximize-2"></i></button><button class="tb-btn icon" id="drawerH" aria-label="Collapse analysis" title="Collapse (C)"><i data-icon="chevdown"></i></button></div></div>
+    <div class="analysis-header"><select id="chartSelect" aria-label="Analysis chart"><option>Airflow</option><option selected>Lift</option><option>Drag</option><option>Forces</option></select><div class="seg" id="chartPicker" role="tablist" aria-label="Analysis chart"><button role="tab" data-chart="Airflow" aria-selected="false">Airflow</button><button role="tab" data-chart="Lift" aria-selected="true">Lift</button><button role="tab" data-chart="Drag" aria-selected="false">Drag</button><button role="tab" data-chart="Forces" aria-selected="false">Forces</button></div><span id="drawerSub"></span><div class="analysis-actions"><button class="tb-btn" id="showData" aria-pressed="false">Show Data</button><button class="tb-btn icon" id="focusChart" aria-label="Focus chart" title="Focus (F)"><i data-icon="maximize-2"></i></button><button class="tb-btn icon" id="drawerH" aria-label="Close analysis" title="Close (C)"><i data-icon="chevdown"></i></button></div></div>
     <div class="analysis-body"><div class="hero"><div class="metric"><strong id="metric1"></strong><span id="metric1Label"></span></div><div class="metric"><strong id="metric2"></strong><span id="metric2Label"></span></div><p id="insight"></p></div><div class="cards">
       <article class="card" id="cardProfile" hidden><div class="chart-tools"><details><summary>Layers</summary><div id="profSeg" class="layer-list"><button data-p="flow" aria-pressed="true">Air</button><button data-p="field" aria-pressed="true">Pressure</button><button data-p="arrows" aria-pressed="false">Arrows</button></div></details></div><p id="hlProfile" hidden></p><canvas id="profile" role="img" aria-label="Airflow around the wing"></canvas><p class="cap"><span class="key"><i class="sq" style="--c:var(--cp-lo)"></i>Low pressure</span><span class="key"><i class="sq" style="--c:var(--cp-hi)"></i>High pressure</span><span id="foilName"></span></p></article>
       <article class="card" id="cardLift"><p id="hlLift" hidden></p><canvas id="liftChart" role="img" aria-label="Lift coefficient against angle of attack"></canvas></article>
@@ -378,14 +424,14 @@ input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to r
       <article class="card" id="cardForces" hidden><p id="hlForces" hidden></p><div class="bars" id="bars"></div></article>
     </div><div id="chartData" hidden></div></div>
   </section>
-  <div class="pop glass menu" id="overlaysPop" hidden role="dialog" aria-label="Overlays"><h3>Overlays</h3><button id="forcesBtn" aria-pressed="true">Force Arrows</button><button id="valuesBtn" aria-pressed="false">Force Values</button><button id="flowBtn" aria-pressed="true">Airflow</button><button id="weatherBtn" aria-pressed="true">Weather Effects</button><p class="hint">Thrust and drag use a separate scale for legibility.</p><label>Appearance<select id="themePicker"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label>Units<select id="unitsPicker"><option value="metric">Metric</option><option value="imperial">Imperial</option><option value="aviation">Aviation</option></select></label></div>
-  <div class="pop glass menu" id="morePop" hidden role="dialog" aria-label="More"><h3>Camera</h3><div id="mobileCamera" class="seg"><button data-view="34">3/4</button><button data-view="side">Side</button><button data-view="rear">Back</button><button data-view="top">Top</button></div><button data-menu="envBtn">Environment</button><button data-menu="overlaysBtn">Overlays</button></div>
+  <div class="pop glass menu" id="overlaysPop" hidden role="dialog" aria-label="Overlays"><button class="tb-btn icon x" data-close="overlaysPop" aria-label="Close menu"><i data-icon="xmark"></i></button><h3>Overlays</h3><button id="forcesBtn" aria-pressed="false">Force Arrows</button><button id="valuesBtn" aria-pressed="false">Force Values</button><button id="flowBtn" aria-pressed="true">Airflow</button><button id="weatherBtn" aria-pressed="true">Weather Effects</button><p class="hint">Thrust and drag use a separate scale for legibility.</p><label>Appearance<select id="themePicker"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label>Units<select id="unitsPicker"><option value="metric">Metric</option><option value="imperial">Imperial</option><option value="aviation">Aviation</option></select></label></div>
+  <div class="pop glass menu" id="morePop" hidden role="dialog" aria-label="More"><button class="tb-btn icon x" data-close="morePop" aria-label="Close menu"><i data-icon="xmark"></i></button><h3>Camera</h3><div id="mobileCamera" class="seg"><button data-view="34" aria-pressed="true">3/4</button><button data-view="side" aria-pressed="false">Side</button><button data-view="rear" aria-pressed="false">Back</button><button data-view="top" aria-pressed="false">Top</button></div><button data-menu="flyBtn">Flight controls &amp; aircraft details</button><button data-menu="chartsBtn">Analysis charts</button><button data-menu="envBtn">Environment</button><button data-menu="overlaysBtn">Overlays</button></div>
   <div class="pop glass" id="acPop" hidden role="dialog" aria-label="Choose an aircraft"><button class="tb-btn icon x" type="button" data-close="acPop" aria-label="Close"><i data-icon="xmark"></i></button><h3>Choose an aircraft</h3><div class="acgrid" id="acGrid"></div></div>
   <div class="pop glass" id="envPop" hidden role="dialog" aria-label="Environment"><button class="tb-btn icon x" type="button" data-close="envPop" aria-label="Close"><i data-icon="xmark"></i></button>
     <h3>Place</h3><div class="placegrid" id="placeGrid"></div>
-    <h3>Light</h3><div class="seg full icons" id="timeSeg" role="group" aria-label="Light"></div>
+    <h3>Light <button class="info" data-info="lighting" aria-label="About lighting"></button></h3><div class="seg full icons" id="timeSeg" role="group" aria-label="Light"></div>
   </div>
-  <div class="infocard glass" id="infoCard" hidden role="dialog"><button class="tb-btn icon x" type="button" data-close="infoCard" aria-label="Close"><i data-icon="xmark"></i></button><h4 id="infoTitle"></h4><p id="infoWhat"></p><p class="why" id="infoWhy"></p><div class="real" id="infoReal"></div><div class="formula" id="infoFormula"></div></div>
+  <div class="infocard glass" id="infoCard" hidden role="dialog" aria-labelledby="infoTitle"><button class="tb-btn icon x" type="button" data-close="infoCard" aria-label="Close"><i data-icon="xmark"></i></button><h4 id="infoTitle"></h4><p id="infoWhat"></p><p class="why" id="infoWhy"></p><div class="real" id="infoReal"></div><div class="formula" id="infoFormula"></div></div>
   <div class="toast glass" id="toast" hidden><button class="tb-btn icon x" type="button" data-close="toast" aria-label="Close" style="position:absolute;right:6px;top:6px"><i data-icon="xmark"></i></button><div class="k">What changed</div><h4 id="toastTitle"></h4><p id="toastText"></p><ul id="toastChips"></ul></div>
   <div class="loading" id="loading"><div><i data-icon="plane"></i>Preparing the sky…</div></div>
 </div>
@@ -2034,9 +2080,9 @@ const EnvGL = (() => {
       else if (uEnv == 2) { c = mix(vec3(0.16, 0.24, 0.09), vec3(0.3, 0.29, 0.27), smoothstep(900.0, 1800.0, h + nz * 300.0));
         c = mix(c, vec3(0.26, 0.25, 0.24), smoothstep(0.3, 0.5, steep));
         float snow = smoothstep(2300.0, 2700.0, h + nz * 500.0) * smoothstep(0.45, 0.3, steep); c = mix(c, vec3(0.92, 0.94, 0.98), snow); }
-      else { c=mix(vec3(.65,.40,.23),vec3(.82,.57,.36),nz);
+      else { c=mix(vec3(.53,.45,.39),vec3(.70,.61,.50),nz);
         float grain=fbm(vec2(p.x+p.z,h)*.22,4),bed=pow(.5+.5*sin(h*1.6+fbm(p.xz/40.0,3)*2.0),10.0);
-        c*=.72+.44*grain-.15*bed;c=mix(c,vec3(.76,.65,.44),smoothstep(12.0,2.0,h)); }
+        c*=.72+.44*grain-.15*bed;c=mix(c,vec3(.71,.65,.54),smoothstep(12.0,2.0,h)); }
       c = mix(c, vec3(0.9, 0.92, 0.96), uSnow * smoothstep(0.5, 0.25, steep));
       return c * (1.0 - 0.35 * uWet);
     }
@@ -2194,7 +2240,7 @@ const Scene3DGL = (() => {
   const holder = new T.Group(), pitch = new T.Group(), flowGroup = new T.Group(), arrowGroup = new T.Group();
   const cam = { az: -0.7, el: 0.22, d: 1, taz: -0.7, tel: 0.22, td: 1 };
   const vis = { alpha: 0, CL: 0.4, stalled: false, sepX: 1, V: 50, h: 1000, thr: 0.8, ab: false, L: 1, W: 1, T: 0, D: 0.1, extended: true };
-  const show = { forces: true, flow: true };
+  const show = { forces: false, flow: true };
   let flow = null, precip = null, arrows = {}, labels = {}, time = 0, viewName = '34', size = 10, paused = false;
   const perf = { acc: 0, n: 0, scale: 0.6 };
   let insets = { l: 16, r: 16, b: 88, t: 136 };
@@ -2427,7 +2473,7 @@ const Scene3DGL = (() => {
     const safeW=Math.max(120,bounds.width-framing.l-framing.r-64),safeH=Math.max(100,bounds.height-framing.t-framing.b-56);
     camera.setViewOffset(bounds.width,bounds.height,(framing.r-framing.l)/2,(framing.b-framing.t)/2,bounds.width,bounds.height);
     const vf=Math.tan(camera.fov*Math.PI/360),fit=Math.max(bounds.height/safeH,bounds.width/(safeW*camera.aspect));
-    const D=size*(bounds.width<600?.43:.34)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
+    const D=size*(bounds.width<600?.43:.52)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
     camera.position.set(D * Math.cos(cam.el) * Math.cos(cam.az), D * Math.sin(cam.el), D * Math.cos(cam.el) * Math.sin(cam.az));
     camera.position.applyAxisAngle(new T.Vector3(0,1,0),-nav.heading);holder.rotation.y=-nav.heading;arrowGroup.rotation.y=-nav.heading;
     camera.lookAt(0, size * 0.02, 0);
@@ -2505,22 +2551,34 @@ const FlightDirector = (() => {
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),mix=(a,b,t)=>a+(b-a)*t;
   const angle=a=>Math.atan2(Math.sin(a),Math.cos(a));
   const state={mode:'auto',x:0,z:0,alt:1000,heading:0,bank:0,pitch:0,speed:40,verticalSpeed:0,rollRate:0,pitchRate:0,aileron:0,elevator:0,rudder:0,throttle:.8,phase:'Cloud cruise',clearance:false,elapsed:0};
-  const keys=new Set();let route=[],target=0,place='',ready=false,requestedAlt=1000,altitudeTarget=false,lap=0;
+  const stick={roll:0,pull:0};const keys=new Set();let route=[],target=0,place='',ready=false,requestedAlt=1000,altitudeTarget=false,lap=0;
   function configure(name,points,alt){
     if(!points||points.length<2)return;
     route=points;place=name;target=1;lap=0;Object.assign(state,{x:points[0].x,z:points[0].z,alt,heading:Math.atan2(points[1].z-points[0].z,points[1].x-points[0].x),bank:0,pitch:0,rollRate:0,pitchRate:0,aileron:0,elevator:0,rudder:0,verticalSpeed:0,elapsed:0});requestedAlt=alt;altitudeTarget=false;ready=true;keys.clear();
   }
-  function setMode(mode){if(mode!=='auto'&&mode!=='manual')return;state.mode=mode;clearKeys();requestedAlt=state.alt;altitudeTarget=false;
+  function setMode(mode){if(mode!=='auto'&&mode!=='manual')return;state.mode=mode;state.phase=mode==='manual'?'Manual flight':'Joining scenic route';clearKeys();requestedAlt=state.alt;altitudeTarget=false;
     if(mode==='auto'&&route.length){let best=Infinity,bestIndex=0,bestLap=lap;
       for(const l of route.periodX?[lap-1,lap,lap+1]:[0])route.forEach((p,i)=>{const d=(p.x+l*(route.periodX||0)-state.x)**2+(p.z-state.z)**2;if(d<best){best=d;bestIndex=i;bestLap=l;}});
       target=(bestIndex+2)%route.length;lap=bestLap+(bestIndex+2>=route.length?1:0);
     }
   }
   function waypoint(){const p=route[target];return {x:p.x+lap*(route.periodX||0),z:p.z};}
+  // Sample clearance along the actual river ahead, rather than a straight ray
+  // through the cliff on the outside of a bend.
+  function routeAhead(distance){
+    let x=state.x,z=state.z,i=target,l=lap;
+    for(let n=0;n<route.length;n++){
+      const p=route[i],px=p.x+l*(route.periodX||0),dx=px-x,dz=p.z-z,len=Math.hypot(dx,dz);
+      if(len>=distance&&len>0)return {x:x+dx*distance/len,z:z+dz*distance/len,dx:dx/len,dz:dz/len};
+      distance-=len;x=px;z=p.z;i=(i+1)%route.length;if(i===0)l++;
+    }
+    return {x,z,dx:Math.cos(state.heading),dz:Math.sin(state.heading)};
+  }
   function setAltitude(value){if(Number.isFinite(value)){requestedAlt=clamp(value,30,16000);altitudeTarget=true;}}
   function setThrottle(value){if(Number.isFinite(value))state.throttle=clamp(value,0,1);}
   function key(k,on){if(on)keys.add(k.toLowerCase());else keys.delete(k.toLowerCase());}
-  function clearKeys(){keys.clear();}
+  function clearKeys(){keys.clear();stick.roll=stick.pull=0;}
+  function setStick(roll,pull){stick.roll=Number.isFinite(roll)?clamp(roll,-1,1):0;stick.pull=Number.isFinite(pull)?clamp(pull,-1,1):0;}
   function step(dt,airspeed,size,heightAt=()=>0){
     if(!ready||dt<=0)return state;
     dt=Math.min(dt,.15);state.elapsed+=dt;const oldAlt=state.alt,oldBank=state.bank,oldPitch=state.pitch;
@@ -2533,23 +2591,23 @@ const FlightDirector = (() => {
       turn=clamp(error*.8,-.32,.32);
       const bankTarget=clamp(turn*1.4,-.44,.44);
       rollEffort=clamp((bankTarget-state.bank)*3,-1,1);state.bank=mix(state.bank,bankTarget,1-Math.exp(-dt*2.8));
-      if(place==='canyon'){goalAlt=155+35*Math.sin(state.elapsed*.028);state.phase='River canyon';}
-      else{const q=Math.sin(state.elapsed*Math.PI*2/300+1.2),v=clamp((q+.25)/.95,0,1),smooth=v*v*(3-2*v);goalAlt=145+2850*smooth;state.phase=state.alt>2780?'Above the cloud tops':state.alt>850?'Through the clouds':state.alt<350?'Island channels':goalAlt<state.alt?'Coastal descent':'Climbing to cloud';}
+      if(place==='canyon'){goalAlt=105+18*Math.sin(state.elapsed*.028);state.phase='River canyon';}
+      else{const q=Math.sin(state.elapsed*Math.PI*2/210+1.2),v=clamp((q+.25)/.95,0,1),smooth=v*v*(3-2*v);goalAlt=145+2850*smooth;state.phase=state.alt>2780?'Above the cloud tops':state.alt>850?'Through the clouds':state.alt<350?'Island channels':goalAlt<state.alt?'Coastal descent':'Climbing to cloud';}
     }else{
-      const roll=(keys.has('arrowright')?1:0)-(keys.has('arrowleft')?1:0),pull=(keys.has('arrowup')?1:0)-(keys.has('arrowdown')?1:0);
+      const roll=keys.has('arrowright')||keys.has('arrowleft')?(keys.has('arrowright')?1:0)-(keys.has('arrowleft')?1:0):stick.roll,pull=keys.has('arrowup')||keys.has('arrowdown')?(keys.has('arrowup')?1:0)-(keys.has('arrowdown')?1:0):stick.pull;
       state.throttle=clamp(state.throttle+((keys.has('w')?1:0)-(keys.has('s')?1:0))*.32*dt,0,1);
       const desiredSpeed=clamp(airspeed*.58*(.42+.92*state.throttle),22,160);
       state.speed=clamp(state.speed+(clamp((desiredSpeed-state.speed)*.7,-14,10)-Math.sin(state.pitch)*4.9)*dt,18,170);
       const bankTarget=roll*.95;
       if(pull)altitudeTarget=false;
-      const pitchTarget=pull*.40+(altitudeTarget&&!pull?clamp(Math.atan2(requestedAlt-state.alt,state.speed*4),-.30,.30):0);
+      const pitchTarget=pull*(pull<0?.70:.44)+(altitudeTarget&&!pull?clamp(Math.atan2(requestedAlt-state.alt,state.speed*4),-.65,.40):0);
       // Damped angular acceleration gives the controls weight and a smooth return to level.
       rollEffort=clamp((bankTarget-state.bank)*2.6-state.rollRate*1.05,-1,1);
       pitchEffort=clamp((pitchTarget-state.pitch)*3.6-state.pitchRate*1.2+pull*.12,-1,1);
       state.rollRate=clamp(state.rollRate+((bankTarget-state.bank)*7-state.rollRate*3.6)*dt,-1.25,1.25);
-      state.pitchRate=clamp(state.pitchRate+((pitchTarget-state.pitch)*6-state.pitchRate*3.8)*dt,-.5,.5);
+      state.pitchRate=clamp(state.pitchRate+((pitchTarget-state.pitch)*6-state.pitchRate*3.8)*dt,-.75,.65);
       state.bank=clamp(state.bank+state.rollRate*dt,-1.05,1.05);
-      state.pitch=clamp(state.pitch+state.pitchRate*dt,-.48,.48);
+      state.pitch=clamp(state.pitch+state.pitchRate*dt,-.78,.52);
       // Coordinated turn: banking redirects lift; higher speed means a wider turn.
       turn=9.81*Math.tan(state.bank)/Math.max(state.speed,18);
       state.phase='Manual flight';
@@ -2558,9 +2616,9 @@ const FlightDirector = (() => {
     state.heading=angle(state.heading+turn*dt);
     const dx=Math.cos(state.heading),dz=Math.sin(state.heading),side=Math.max(size*.6,10),clear=Math.max(35,size*.85);
     let ground=0;
-    for(const ahead of [0,state.speed*2,state.speed*5])for(const wing of [-side,0,side])ground=Math.max(ground,heightAt(state.x+dx*ahead-dz*wing,state.z+dz*ahead+dx*wing)||0);
+    for(const ahead of [0,state.speed*2,state.speed*5]){const p=state.mode==='auto'&&place==='canyon'?routeAhead(ahead):{x:state.x+dx*ahead,z:state.z+dz*ahead,dx,dz};for(const wing of [-side,0,side])ground=Math.max(ground,heightAt(p.x-p.dz*wing,p.z+p.dx*wing)||0);}
     const floor=ground+clear;state.clearance=goalAlt<floor;goalAlt=Math.max(goalAlt,floor);
-    if(state.mode==='auto')state.alt+=clamp((goalAlt-state.alt)*.32,-18,24)*dt;
+    if(state.mode==='auto')state.alt+=clamp((goalAlt-state.alt)*.32,-52,32)*dt;
     else{
       let climb=state.speed*Math.sin(state.pitch);
       if(state.clearance){climb=Math.max(climb,clamp((floor-state.alt)*1.6,0,45));state.pitch=Math.max(state.pitch,Math.atan2(climb,state.speed));pitchEffort=Math.max(pitchEffort,.55);}
@@ -2581,7 +2639,35 @@ const FlightDirector = (() => {
     state.rudder=mix(state.rudder,clamp(state.bank*.55+state.aileron*.12,-.7,.7),1-Math.exp(-dt*5));
     return state;
   }
-  return {state,configure,setMode,setAltitude,setThrottle,key,clearKeys,step,get ready(){return ready;}};
+  return {state,configure,setMode,setAltitude,setThrottle,key,clearKeys,setStick,step,get targetAltitude(){return altitudeTarget?requestedAlt:null;},get ready(){return ready;}};
+})();
+/* Device gravity projected into screen axes. No heading/magnetometer is needed.
+   Keep this controller pure so calibration, rotation and stale input are testable. */
+const TiltInput = (() => {
+  const clamp=v=>Math.max(-1,Math.min(1,v));
+  function create(){
+    let baseline=null,latest=null,angle=0,last=-Infinity,roll=0,pull=0;
+    function sample(beta,gamma,screenAngle,now){
+      if(![beta,gamma,screenAngle,now].every(Number.isFinite))return false;
+      const b=beta*Math.PI/180,g=gamma*Math.PI/180,a=screenAngle*Math.PI/180;
+      const x=-Math.cos(b)*Math.sin(g),y=Math.sin(b),z=Math.cos(b)*Math.cos(g);
+      const sx=x*Math.cos(a)-y*Math.sin(a),sy=x*Math.sin(a)+y*Math.cos(a);
+      latest={roll:Math.atan2(-sx,Math.hypot(sy,z)),pull:Math.atan2(sy,z)};
+      if(angle!==screenAngle){baseline=null;roll=pull=0;}angle=screenAngle;last=now;
+      if(!baseline)baseline={...latest};return true;
+    }
+    function recenter(){baseline=latest?{...latest}:null;roll=pull=0;}
+    function reset(){baseline=latest=null;last=-Infinity;roll=pull=0;}
+    const axis=d=>{const deg=Math.atan2(Math.sin(d),Math.cos(d))*180/Math.PI;return clamp(Math.sign(deg)*Math.max(0,Math.abs(deg)-2.5)/22);};
+    function step(dt,now){
+      if(!latest||now-last>600){roll=pull=0;return {roll:0,pull:0,fresh:false};}
+      const t=1-Math.exp(-Math.min(dt,.1)*8);
+      roll+=(axis(latest.roll-baseline.roll)-roll)*t;pull+=(axis(latest.pull-baseline.pull)-pull)*t;
+      return {roll,pull,fresh:true};
+    }
+    return {sample,recenter,reset,step};
+  }
+  return {create};
 })();
 /* ================= GPU engine core: WebGPU device, resources, frame uniforms, shared WGSL ================= */
 const G = (() => {
@@ -3986,7 +4072,7 @@ const GTerrain = (() => {
   // tile: size of the repeating world square (m); water: sea / river level (m); track: the flight line runs along +x at this z (fraction of tile)
   const PLACES = {
     islands: { id: 0, tile: 32768, water: 0, hmax: 560, seed: 11, track: 0.5, lodK: 6, waves: 0.45, treeLine: 9000, snowLine: 99999, albedo: [0.05, 0.085, 0.09] },
-    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.3, 0.17, 0.1] }
+    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.22, 0.20, 0.17] }
   };
   const GRID = 32, DTN = 1024;
   let d, frameBuf, R = {}, P = {}, BG = {}, place = null, RES = 2048, SHRES = 1024, genDue = false, shadowDue = false, ready = false;
@@ -4183,23 +4269,7 @@ fn worley(uv: vec2f, cells: f32) -> vec4f {
 }
 `;
   /* shared by generation, material maps and drawing: canyon wall profiles and surface materials */
-  const SURF_WGSL = `
-fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
-fn wrapf(c: vec2f, per: f32) -> vec2f { return c - per * floor(c / per); }
-// periodic value noise (per = lattice cells per tile, so it repeats with the terrain)
-fn vnPa(p: vec2f, per: vec2f) -> f32 {   // periodic value noise with a different period per axis (stretched features)
-  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
-  let a = hash12(i - per * floor(i / per)); let b = hash12((i + vec2f(1.0, 0.0)) - per * floor((i + vec2f(1.0, 0.0)) / per));
-  let c = hash12((i + vec2f(0.0, 1.0)) - per * floor((i + vec2f(0.0, 1.0)) / per)); let e = hash12((i + vec2f(1.0, 1.0)) - per * floor((i + vec2f(1.0, 1.0)) / per));
-  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
-}
-fn vnP(p: vec2f, per: f32) -> f32 {
-  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
-  let a = hash12(wrapf(i, per)); let b = hash12(wrapf(i + vec2f(1.0, 0.0), per));
-  let c = hash12(wrapf(i + vec2f(0.0, 1.0), per)); let e = hash12(wrapf(i + vec2f(1.0, 1.0), per));
-  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
-}
-// canyon wall: height above the river (m) at distance d (m) from its centre line; a = 0 outside a bend .. 1 inside (gentler slip-off slope)
+  const CANYON_PROFILE_WGSL = `// canyon wall: height above the river (m) at distance d (m) from its centre line; a = 0 outside a bend .. 1 inside (gentler slip-off slope)
 // river bed, sandy bank, talus, lower cliff (Kayenta), bench, upper cliff (Navajo sandstone), rounded rim
 fn cprof(d: f32, a: f32) -> f32 {
   let w = 96.0; let q = sat(d / w);
@@ -4227,19 +4297,34 @@ fn cprofT(d: f32) -> f32 {
 }
 // A = (distance to the river, bend weight, plateau height, distance to a side canyon), B.x = side-canyon depth factor
 fn canyonH(A: vec4f, B: vec4f) -> f32 { return min(min(A.z, cprof(A.x, A.y)), mix(A.z, cprofT(A.w), B.x)); }
+`;
+  const SURF_WGSL = `
+fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
+fn wrapf(c: vec2f, per: f32) -> vec2f { return c - per * floor(c / per); }
+// periodic value noise (per = lattice cells per tile, so it repeats with the terrain)
+fn vnPa(p: vec2f, per: vec2f) -> f32 {   // periodic value noise with a different period per axis (stretched features)
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  let a = hash12(i - per * floor(i / per)); let b = hash12((i + vec2f(1.0, 0.0)) - per * floor((i + vec2f(1.0, 0.0)) / per));
+  let c = hash12((i + vec2f(0.0, 1.0)) - per * floor((i + vec2f(0.0, 1.0)) / per)); let e = hash12((i + vec2f(1.0, 1.0)) - per * floor((i + vec2f(1.0, 1.0)) / per));
+  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
+}
+fn vnP(p: vec2f, per: f32) -> f32 {
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  let a = hash12(wrapf(i, per)); let b = hash12(wrapf(i + vec2f(1.0, 0.0), per));
+  let c = hash12(wrapf(i + vec2f(0.0, 1.0), per)); let e = hash12(wrapf(i + vec2f(1.0, 1.0), per));
+  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
+}
+${CANYON_PROFILE_WGSL}
 // horizontal rock layers of the Colorado Plateau by height above the river
 fn strataCol(y: f32) -> vec3f {
-  var c = lin(vec3f(0.66, 0.44, 0.32));
-  let kb = 0.5 + 0.28 * sin(y * 0.21 + 1.3 * sin(y * 0.13));
-  c = mix(c, mix(lin(vec3f(0.6, 0.34, 0.24)), lin(vec3f(0.74, 0.49, 0.37)), kb), smoothstep(40.0, 50.0, y));
-  let nb = 0.5 + 0.22 * sin(y * 0.13 + 2.0 * sin(y * .033));
-  let nav = mix(mix(lin(vec3f(0.8, 0.48, 0.29)), lin(vec3f(0.84, 0.55, 0.35)), nb), lin(vec3f(0.85, 0.62, 0.44)), smoothstep(215.0, 292.0, y));
-  c = mix(c, nav, smoothstep(155.0, 168.0, y));
-  c = mix(c, lin(vec3f(0.84, 0.66, 0.5)), smoothstep(290.0, 304.0, y) * 0.75);
-  c = mix(c, lin(vec3f(0.62, 0.38, 0.28)), smoothstep(318.0, 324.0, y));
-  let eb = 0.5 + 0.5 * sin(y * 0.19);
-  c = mix(c, mix(lin(vec3f(0.86, 0.6, 0.46)), lin(vec3f(0.93, 0.84, 0.72)), eb), smoothstep(388.0, 396.0, y));
-  c = mix(c, lin(vec3f(0.52, 0.42, 0.36)), smoothstep(540.0, 548.0, y));
+  // Muted limestone, shale and iron-bearing sandstone, in linear reflectance.
+  let beds=.5+.5*sin(y*.17+1.3*sin(y*.037));
+  var c=mix(lin(vec3f(.54,.49,.43)),lin(vec3f(.66,.57,.48)),beds*.5);
+  c=mix(c,mix(lin(vec3f(.59,.43,.36)),lin(vec3f(.70,.57,.47)),beds),smoothstep(42.0,62.0,y));
+  c=mix(c,mix(lin(vec3f(.67,.57,.47)),lin(vec3f(.77,.68,.57)),beds*.65),smoothstep(155.0,175.0,y));
+  c=mix(c,lin(vec3f(.73,.67,.57)),smoothstep(286.0,310.0,y)*.7);
+  c=mix(c,lin(vec3f(.51,.45,.40)),smoothstep(330.0,348.0,y));
+  c=mix(c,mix(lin(vec3f(.68,.54,.46)),lin(vec3f(.79,.73,.63)),beds),smoothstep(385.0,405.0,y));
   return c;
 }
 struct Surf { col: vec3f, rough: f32, rock: f32, veg: f32, sand: f32 };
@@ -4253,20 +4338,20 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
   var rc = strataCol(y + 5.0 * (n3 - 0.5));
   // Individual sediment beds and eroded seams, layered over the scanned stone.
   let bedPhase=y*1.65+1.6*n1+0.65*sin(y*.13+n3*8.0);
-  let bedding=pow(.5+.5*sin(bedPhase),12.0);
+  let bedding=pow(.5+.5*sin(bedPhase),8.0);
   let broken=.3+.7*vnP(uv*4096.0+2.7,4096.0);
   rc *= .94+.09*sin(y*.49+n3*3.0)-.18*bedding*broken;
-  rc = mix(rc,lin(vec3f(.39,.24,.16)),pow(smoothstep(.55,.85,n2),2.0)*.23);
+  rc = mix(rc,lin(vec3f(.35,.30,.26)),pow(smoothstep(.55,.85,n2),2.0)*.23);
   let st = 0.55 * vnP(uv * 2048.0, 2048.0) + 0.45 * vnP(uv * 512.0, 512.0);
   let rimY = select(305.0, 166.0, y < 172.0);
   let len = mix(40.0, 150.0, vnP(uv * 256.0 + 9.0, 256.0));
   let varnish = smoothstep(0.56, 0.82, st) * (0.3 + 0.7 * smoothstep(rimY - len, rimY - 4.0, y)) * smoothstep(0.5, 0.8, slope) * smoothstep(60.0, 90.0, y);
-  rc = mix(rc, lin(vec3f(0.33, 0.2, 0.14)), varnish * 0.72);
+  rc = mix(rc, lin(vec3f(0.29, 0.27, 0.25)), varnish * 0.56);
   rc *= 0.82 + 0.35 * n2;
   // flats: pale slickrock crossed by two sets of joints, orange drift sand in wind-stretched sheets, scattered shrubs
   let sn = 0.55 * vnPa(uv * vec2f(1024.0, 256.0), vec2f(1024.0, 256.0)) + 0.45 * vnP(uv * 2048.0 + 3.7, 2048.0);
   let sandy = smoothstep(0.6, 0.85, sn + 0.35 * (n3 - 0.5));
-  var fc = mix(lin(vec3f(0.8, 0.6, 0.45)), lin(vec3f(0.82, 0.52, 0.34)), sandy);
+  var fc = mix(lin(vec3f(0.69, 0.62, 0.53)), lin(vec3f(0.67, 0.56, 0.45)), sandy);
   // cross-bedded slickrock seen from above: broad sweeping bands of paler and darker rock
   let xb = fract(dot(vec2f(700.0, 420.0), uv) + 2.2 * vnP(uv * 96.0 + 2.1, 96.0) + 0.8 * vnP(uv * 384.0, 384.0));
   fc *= (0.95 + 0.1 * smoothstep(0.2, 0.5, xb) * (1.0 - smoothstep(0.55, 0.9, xb))) * (0.95 + 0.08 * n1);
@@ -4276,7 +4361,7 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
   let joint = max(smoothstep(0.97, 0.998, j1) * jm, smoothstep(0.975, 0.998, j2) * 0.7 * jm * jm) * (1.0 - sandy);
   fc = mix(fc, lin(vec3f(0.62, 0.44, 0.3)), joint * (0.35 + 0.35 * fine));
   fc = mix(fc, strataCol(y + 3.0) * 1.04, 0.15 + 0.45 * smoothstep(300.0, 200.0, y));
-  var veg = (0.12 * smoothstep(250.0, 295.0, y) + 0.18 * smoothstep(0.5, 0.85, n3) + 0.25 * joint) * (1.0 - rock);
+  var veg = (0.40 * smoothstep(250.0, 295.0, y) + 0.23 * smoothstep(0.4, 0.8, n3) + 0.25 * joint) * (1.0 - rock);
   fc = mix(fc, lin(vec3f(0.35, 0.34, 0.22)), 0.1 * veg);
   if (fine > 0.0) {
     // cross-bedding: fine curved laminae in the bare rock
@@ -4287,10 +4372,10 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
     fc = mix(fc, lin(vec3f(0.3, 0.33, 0.2)) * (0.8 + 0.4 * hash12(ci + 5.3)), shrub);
   }
   // river banks: sand bars and a ribbon of tamarisk and willow
-  let riv = smoothstep(148.0, 111.0, A.x) * smoothstep(13.0, 6.0, y) * step(-0.4, y);
+  let riv = smoothstep(148.0, 111.0, A.x) * smoothstep(32.0, 8.0, y) * step(-0.4, y);
   let rip = riv * smoothstep(0.35, 0.6, n1 + 0.35 * n2);
   fc = mix(fc, lin(vec3f(0.8, 0.69, 0.53)), riv);
-  fc = mix(fc, lin(vec3f(0.23, 0.31, 0.12)) * (0.8 + 0.4 * n2), rip);
+  fc = mix(fc, lin(vec3f(0.28, 0.34, 0.20)) * (0.8 + 0.4 * n2), rip);
   rock *= 1.0 - 0.6 * riv;
   veg = max(veg, rip);
   let wet = smoothstep(1.0, 0.1, y) * step(-0.4, y);
@@ -4304,7 +4389,7 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
     bc = mix(bc, lin(vec3f(0.66, 0.52, 0.5)), smoothstep(0.78, 0.86, bb));
     fc = mix(fc, bc * (0.9 + 0.2 * n2), B.y); rc = mix(rc, bc * 0.95, B.y); veg *= 1.0 - B.y;
   }
-  s.col = mix(fc, rc, rock); s.rock = rock; s.veg = veg; s.sand = sandy * (1.0 - rock);
+  let mineral=mix(fc,rc,rock);s.col=mix(mineral,vec3f(dot(mineral,vec3f(.2126,.7152,.0722))),.14); s.rock = rock; s.veg = veg; s.sand = sandy * (1.0 - rock);
   s.rough = mix(mix(0.9, 0.95, sandy), 0.84, rock) - 0.3 * wet;
   return s;
 }
@@ -4448,7 +4533,7 @@ fn canyonGen(uv: vec2f, dt: vec4f) -> GenOut {
   base = mix(base, 290.0 + 44.0 * mnd * mnd + (e.x - 0.5) * 26.0, bz);
   // the canyon: alcoves and buttresses bend the rim line
   // Break up the smooth wall silhouette at several geological scales.
-  let eroded=48.0*fbm(uv+.11,155.0,3,.5).x+12.0*fbm(uv+.47,680.0,3,.5).x;
+  let eroded=64.0*fbm(uv+.11,155.0,4,.5).x+17.0*fbm(uv+.47,680.0,3,.5).x;
   let pert=eroded*smoothstep(112.0,195.0,far);
   var o: GenOut;
   o.a = vec4f(max(far + pert, 0.0), sat(dt.y), base, max(dt.z + pert * 0.5, 0.0));
@@ -4857,7 +4942,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   let bed4 = textureSample(alb, smp, i.uv); let bed = bed4.rgb * bed4.rgb;
   let depth = max(F.water - Hs(i.uv, 0), 0.0);
   var sig = vec3f(0.25, 0.065, 0.035); var omega = vec3f(0.003, 0.031, 0.045);
-  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.008, 0.145, 0.155); }
+  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.025, 0.115, 0.095); }
   let tr = exp(-sig * depth * 2.0);
   var col = bed * tr + omega * (1.0 - tr);
   if(F.place==1u){ // emerald shallows into blue-green channel water
@@ -5193,7 +5278,7 @@ ${GAtmos.LL}
     for(let pass=0;pass<3;pass++){const old=out.map(p=>({...p}));for(let i=0;i<out.length;i++){const a=old[(i+159)%160],b=old[i],c=old[(i+1)%160];out[i]={x:(a.x+b.x*4+c.x)/6,z:(a.z+b.z*4+c.z)/6};}}
     return out;
   }
-  return { init, setPlace, update, heightAt, hook, startPoint, scenicRoute, selectShadow, drawShadow, PLACES, get place() { return place; }, get ready() { return ready; }, get cpuReady() { return !!cpu; }, R, q, set lodK(v) { lodK = v; }, get lodK() { return lodK; }, get nNodes() { return nNodes; } };
+  return { init, setPlace, update, heightAt, hook, startPoint, scenicRoute, selectShadow, drawShadow, PLACES, get place() { return place; }, get ready() { return ready; }, get cpuReady() { return !!cpu; }, R, q, set lodK(v) { lodK = v; }, get lodK() { return lodK; }, get nNodes() { return nNodes; },canyonProfileWGSL:CANYON_PROFILE_WGSL };
 })();
 /* ================= Cascaded shadow maps: 4 stabilised cascades, soft PCF in the lighting pass ================= */
 const GShadow = (() => {
@@ -5278,7 +5363,7 @@ const GTrees = (() => {
   const T = THREE;
   const MAXM = 24000, MAXI = 120000, RINGS = 5, GRIDN = 128;
   // per place: density, share of conifers, tree height range (m)
-  const SPECIES = { islands: [0.0, 0.0, 9, 19], canyon: [0.6, 0.45, 3, 8] };
+  const SPECIES = { islands: [0.0, 0.0, 9, 19], canyon: [0.85, 0.28, 2.2, 6.5] };
   let d, frameBuf, R = {}, P = {}, BG = {}, on = true, placeKey = null;
 
   function mkMesh(kind) {   // unit-height tree: uv.x = 0 trunk, 1 foliage
@@ -5293,10 +5378,19 @@ const GTrees = (() => {
         parts.push([c, 1]);
       }
     } else {       // broadleaf: lumpy crown
-      const s = new T.IcosahedronGeometry(0.34, 2); s.scale(1, 0.85, 1); s.translate(0, 0.62, 0);
-      const p = s.attributes.position;
-      for (let k = 0; k < p.count; k++) { const x = p.getX(k), y = p.getY(k) - 0.62, z = p.getZ(k); const n = 1 + 0.13 * Math.sin(x * 19 + y * 7) * Math.cos(z * 17 - y * 11) + 0.08 * Math.sin(x * 41 + z * 37); p.setXYZ(k, x * n, 0.62 + y * n, z * n); }
-      parts.push([s, 1]);
+      // Overlapping uneven crowns avoid the single ball-on-a-stick silhouette.
+      for(let j=0;j<7;j++){
+        const angle=j*2.39996,ring=j===0?0:.18,cy=.53+(j%3)*.10;
+        const crown=new T.IcosahedronGeometry(j===0?.25:.20,1);
+        crown.scale(1,.8+(j%2)*.18,1);
+        const p=crown.attributes.position;
+        for(let k=0;k<p.count;k++){
+          const x=p.getX(k),y=p.getY(k),z=p.getZ(k);
+          const n=1+.16*Math.sin(x*39+y*29+j)*Math.cos(z*33-y*19);
+          p.setXYZ(k,x*n+Math.cos(angle)*ring,y*n+cy,z*n+Math.sin(angle)*ring);
+        }
+        parts.push([crown,1]);
+      }
     }
     const pos = [], nrm = [], uv = [], idx = []; let base = 0;
     for (const [g0, part] of parts) {
@@ -5356,13 +5450,13 @@ fn Hs(uv: vec2f) -> f32 {
   let uv = wxz / F.tile;
   let m = textureLoad(mat, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(mat, 0)))), i32(textureDimensions(mat, 0).x)), 0);
   let fa = textureLoad(alb, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(alb, 0)))), i32(textureDimensions(alb, 0).x)), 0).a;
-  let dens = smoothstep(0.25, 0.7, m.b) * (1.0 - m.a) * (1.0 - m.r) * (1.0 - fa) * TU.x;
+  let dens = smoothstep(0.12, 0.65, m.b) * (1.0 - m.a) * (1.0 - m.r) * (1.0 - fa) * TU.x;
   if (h3 > dens * 0.95) { return; }
   let gh = Hs(fract(uv));
   if (gh < F.water + 1.5) { return; }
   let nn = textureLoad(nrm, wrapi(vec2i(floor(fract(uv) * vec2f(textureDimensions(nrm, 0)))), i32(textureDimensions(nrm, 0).x)), 0).xyz;
-  if (nn.y < 0.78) { return; }
-  let conifer = hash2i(cell * 29 + vec2i(3, 3)) < TU.y;
+  if (nn.y < 0.72) { return; }
+  let conifer = gh > 180.0 && hash2i(cell * 29 + vec2i(3, 3)) < TU.y;
   var ht = mix(TU.z, TU.w, pow(hash2i(cell * 17 + vec2i(1, 9)), 0.8)) * (1.0 + 0.12 * f32(ring));
   let P = vec3f(wxz.x - camW.x + F.camPos.x, gh - F.planeAlt, wxz.y - camW.y + F.camPos.z);
   let dd = P.xz - F.camPos.xz;
@@ -5393,7 +5487,7 @@ fn Hs(uv: vec2f) -> f32 {
 fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
 fn leafCol(conifer: bool, seed: f32) -> vec3f {
   var c = lin(vec3f(0.21, 0.35, 0.09));                                                      // tropical broadleaf
-  if (F.place == 1u) { c = select(lin(vec3f(0.27, 0.32, 0.14)), lin(vec3f(0.22, 0.26, 0.17)), conifer); }   // tamarisk / juniper
+  if (F.place == 1u) { c = select(lin(vec3f(0.26, 0.32, 0.20)), lin(vec3f(0.22, 0.27, 0.20)), conifer); }   // tamarisk / juniper
   let v = fract(seed * 7.13);
   c *= 0.75 + 0.5 * v; c = mix(c, c * vec3f(1.15, 1.0, 0.8), fract(seed * 3.7));
   return c;
@@ -5522,6 +5616,99 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
     [[1, 0], [0, 20]].forEach(([k, off]) => { const m = R.mesh[k]; pass.setBindGroup(0, shBG[key][k]); pass.setVertexBuffer(0, m.pos); pass.setIndexBuffer(m.idx, 'uint32'); pass.drawIndexedIndirect(R.args, off); });
   }
   return { init, setPlace, hook, drawShadow, set on(v) { on = v; } };
+})();
+/* Spring-fed canyon cascades. Ribbons follow the generated rock surface and end
+   in the river; world coordinates remain fixed as the flight origin moves. */
+const GWaterfalls = (() => {
+  let pipe,buffer,bind,count=0,cascadeCount=0,terrain=null;
+  function buildCascades(river,heightAt){
+    const out=[];let bend=0;
+    for(let i=1;i<river.n;i++)if(Math.abs(river.cv[i])>Math.abs(river.cv[bend]))bend=i;
+    for(let k=0;k<18;k++){
+      const i=(bend+90+k*1700)%river.n,side=k%2?1:-1;
+      const nx=-river.tz[i]*side,nz=river.tx[i]*side,cx=river.px[i],cz=river.pz[i];
+      const at=d=>({x:cx+nx*d,z:cz+nz*d});
+      let start=0;
+      // Locate a steep, exposed lower cliff, not a flat plateau or tributary bed.
+      for(let d=150;d<310;d+=5){const p=at(d),q=at(d-35),h=heightAt(p.x,p.z);if(h>80&&h<245&&h-heightAt(q.x,q.z)>48){start=d;break;}}
+      if(!start)continue;
+      const points=[];let previous=Infinity,valid=true;
+      for(let d=start;d>=74;d-=3){const p=at(d),h=Math.max(0,heightAt(p.x,p.z));if(h>previous+8){valid=false;break;}previous=h;points.push({...p,y:h+2.2});}
+      if(valid&&points.length>12&&points.at(-1).y<3)out.push({points,nx,nz,width:5+k%3*1.5});
+    }
+    return out;
+  }
+  function rebuild(){
+    const cascades=buildCascades(GTerrain.R.river,GTerrain.heightAt),data=[];cascadeCount=cascades.length;
+    function vertex(p,u,v,kind,nx,nz){data.push(p.x,p.y,p.z,u,v,kind,nx,0,nz);}
+    for(const c of cascades){
+      let length=0;
+      for(let i=0;i<c.points.length-1;i++){
+        const a=c.points[i],b=c.points[i+1],next=length+Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+        for(const [which,side] of [[0,-1],[1,-1],[0,1],[0,1],[1,-1],[1,1]]){
+          const p=which?b:a,w=c.width*(1+.15*Math.sin(i*.7));
+          vertex({x:p.x-c.nz*side*w/2,y:p.y,z:p.z+c.nx*side*w/2},side,which?next:length,0,-c.nx,-c.nz);
+        }length=next;
+      }
+      const end=c.points.at(-1);
+      // Shallow foam fan on the receiving water, plus a restrained spray veil.
+      for(const kind of [1,2])for(const [u,v] of [[-1,-1],[1,-1],[-1,1],[-1,1],[1,-1],[1,1]])vertex(end,u,v,kind,c.nx,c.nz);
+    }
+    buffer?.destroy();count=data.length/9;
+    buffer=G.buf(Math.max(36,data.length*4),GPUBufferUsage.VERTEX,new Float32Array(data));
+  }
+  function init(){
+    const blend={color:{srcFactor:'one',dstFactor:'one-minus-src-alpha',operation:'add'},alpha:{srcFactor:'zero',dstFactor:'one',operation:'add'}};
+    pipe=G.render({label:'canyon-cascades',targets:[{format:'rgba16float',blend}],depth:{compare:'greater',write:false},cull:'none',buffers:[{arrayStride:36,attributes:[{shaderLocation:0,offset:0,format:'float32x3'},{shaderLocation:1,offset:12,format:'float32x2'},{shaderLocation:2,offset:20,format:'float32'},{shaderLocation:3,offset:24,format:'float32x3'}]}],code:`${G.COMMON}
+@group(0) @binding(0) var<uniform> F: Frame;
+@group(0) @binding(1) var auxT:texture_2d<f32>;
+@group(0) @binding(2) var aux2T:texture_2d<f32>;
+@group(0) @binding(3) var smpA:sampler;
+@group(0) @binding(4) var terrainShade:texture_2d<f32>;
+${GTerrain.canyonProfileWGSL}
+// Match terrain's cubic interpolation, not the CPU collision block maxima.
+fn auxB(uv:vec2f)->vec4f{
+  let n=vec2f(textureDimensions(auxT));let st=uv*n-.5;let i=floor(st);let a=st-i;let a2=a*a;let a3=a2*a;
+  let w0=(-a3+3.0*a2-3.0*a+1.0)/6.0;let w1=(3.0*a3-6.0*a2+4.0)/6.0;let w2=(-3.0*a3+3.0*a2+3.0*a+1.0)/6.0;let w3=a3/6.0;
+  let g0=w0+w1;let g1=w2+w3;let p0=(i-.5+w1/g0)/n;let p1=(i+1.5+w3/g1)/n;
+  return g0.y*(g0.x*textureSampleLevel(auxT,smpA,p0,0.0)+g1.x*textureSampleLevel(auxT,smpA,vec2f(p1.x,p0.y),0.0))+g1.y*(g0.x*textureSampleLevel(auxT,smpA,vec2f(p0.x,p1.y),0.0)+g1.x*textureSampleLevel(auxT,smpA,p1,0.0));
+}
+struct VO { @builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) wp:vec3f,@location(2) @interpolate(flat) kind:f32,@location(3) normal:vec3f };
+@vertex fn vs(@location(0) p:vec3f,@location(1) uv:vec2f,@location(2) kind:f32,@location(3) normal:vec3f)->VO{
+  var xz=p.xz-F.terrOff;xz-=round(xz/F.tile)*F.tile;
+  let uvWorld=p.xz/F.tile;let h=canyonH(auxB(uvWorld),textureSampleLevel(aux2T,smpA,uvWorld,0.0));
+  var wp=vec3f(xz.x,max(F.water,h)+1.1-F.planeAlt,xz.y);
+  if(kind>1.5){let right=normalize(cross(F.camPos-wp,vec3f(0,1,0)));wp+=right*uv.x*9.0+vec3f(0,(uv.y+1.0)*6.0,0);}
+  else if(kind>.5){wp+=vec3f(uv.x*12.0,0,uv.y*12.0);}
+  var o:VO;o.pos=F.viewProj*vec4f(wp,1);o.uv=uv;o.wp=wp;o.kind=kind;o.normal=normal;return o;
+}
+@fragment fn fs(i:VO)->@location(0) vec4f{
+  var alpha=0.0;var albedo=vec3f(.78,.85,.83);
+  if(i.kind<.5){
+    let flow=i.uv.y-F.time*19.0;
+    let streams=.5+.5*sin(i.uv.x*25.0+2.0*vnoise2(vec2f(i.uv.x*9.0,flow*.08)));
+    let churn=vnoise2(vec2f(i.uv.x*6.0,flow*.23));
+    alpha=(1.0-smoothstep(.52,1.0,abs(i.uv.x)))*(.35+.4*streams+.15*churn)*smoothstep(0.0,9.0,i.uv.y);
+    albedo=mix(vec3f(.32,.48,.46),vec3f(.88,.92,.88),.55+.25*streams+.2*churn);
+  }else{
+    let r=length(i.uv);let n=vnoise2(i.uv*7.0+vec2f(F.time*.4,-F.time*.7));
+    alpha=(1.0-smoothstep(.2,1.0,r))*(.3+.35*n)*select(.7,.25,i.kind>1.5);
+  }
+  alpha*=1.0-smoothstep(2400.0,4200.0,distance(i.wp,F.camPos));
+  if(alpha<.004){discard;}
+  let sun=max(.0,dot(i.normal,F.sunDir))*.6+.18;
+  let shade=textureSampleLevel(terrainShade,smpA,(i.wp.xz+F.terrOff)/F.tile,0.0);
+  let daylight=F.sunE*(vec3f(.11,.14,.18)*shade.g+F.lightTint*sun*max(F.sunDir.y,.12)*shade.r);
+  let col=albedo*daylight/PI;
+  return vec4f(col*alpha,alpha);
+}`});
+    bind=null;
+  }
+  const hook={name:'canyon-cascades',pre(){
+    if(GTerrain.place?.key!=='canyon'||!GTerrain.cpuReady){terrain=null;count=0;cascadeCount=0;return;}
+    if(terrain!==GTerrain.R.river){terrain=GTerrain.R.river;rebuild();bind=G.bind(pipe,0,[GR.frameBuf,GTerrain.R.aux.createView(),GTerrain.R.aux2.createView(),G.sampler('linRepeat'),GTerrain.R.shV]);}
+  },forward(pass){if(!count)return;pass.setPipeline(pipe);pass.setBindGroup(0,bind);pass.setVertexBuffer(0,buffer);pass.draw(count);}};
+  return {init,hook,buildCascades,get count(){return cascadeCount;}};
 })();
 /* ================= Post: GTAO, temporal anti-aliasing, auto-exposure, bloom, lens flare ================= */
 const GPost = (() => {
@@ -6446,7 +6633,7 @@ const Scene3DGPU = (() => {
   holder.add(pitch); pitch.add(flowGroup);
   const cam = { az: -2.1, el: 0.48, d: 1, taz: -2.1, tel: 0.48, td: 1 };
   const vis = { alpha: 0, CL: 0.4, stalled: false, sepX: 1, V: 50, h: 1000, thr: 0.8, ab: false, L: 1, W: 1, T: 0, D: 0.1, extended: true };
-  const show = { forces: true, flow: true, weather: true };
+  const show = { forces: false, flow: true, weather: true };
   let arrows = {}, labels = {}, time = 0, viewName = '34', size = 10, paused = false;
   let insets = { l: 16, r: 16, b: 88, t: 136 };
   const framing={l:16,r:16,b:88,t:136};
@@ -6709,6 +6896,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     GTerrain.init(GR.frameBuf); GR.addHook(GTerrain.hook);
     GShadow.init(); GR.addHook(GShadow.hook);
     GTrees.init(GR.frameBuf); GR.addHook(GTrees.hook);
+    GWaterfalls.init();GR.addHook(GWaterfalls.hook);
     GClouds.init(GR.frameBuf); GR.addHook(GClouds.hook);
     GPost.init(GR.frameBuf); GR.addHook(GPost.hook);
     initOverlay(); initTrails(); initAerosols();
@@ -6793,7 +6981,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const safeW=Math.max(120,bounds.width-framing.l-framing.r-64),safeH=Math.max(100,bounds.height-framing.t-framing.b-56);
     camera.setViewOffset(bounds.width,bounds.height,(framing.r-framing.l)/2,(framing.b-framing.t)/2,bounds.width,bounds.height);
     const vf=Math.tan(camera.fov*Math.PI/360),fit=Math.max(bounds.height/safeH,bounds.width/(safeW*camera.aspect));
-    const D=size*(bounds.width<600?.43:.34)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
+    const D=size*(bounds.width<600?.43:.52)/vf*fit*cam.d*(viewName==='rear'?1.18:1);
     camera.position.set(D * Math.cos(cam.el) * Math.cos(cam.az), D * Math.sin(cam.el), D * Math.cos(cam.el) * Math.sin(cam.az));
     // world: the aircraft flies along +x; the ground scrolls underneath
     const TP = GTerrain.PLACES[EnvGPU.state.place];
@@ -6862,6 +7050,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const vp = GR.projRZ(camera, new T.Matrix4(), 0, 0).multiply(camera.matrixWorldInverse);
     updateTrails(alt, env);
     aerosolOn=show.flow&&show.weather&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
+    host.dataset.cascades=String(GWaterfalls.count);
     GTerrain.update({ worldX: world.x, worldZ: world.z, env }, camera, vp);
     GShadow.update(camera, size, alt - Math.max(ground, TP.water), env.sunDir, alt);
     envTimer -= dt;
@@ -6949,9 +7138,11 @@ const Content = (() => {
 
   /* ⓘ cards: what it is, why it matters, a real example, and a formula for older students */
   const INFO = {
+    flight: {rLabel:'Try it',t:'Flying and experimenting', w:'Autopilot gives you a scenic tour. Manual lets you bank, climb and dive using arrow keys, touch buttons or tilt.', y:'Speed sets the airspeed used by the lesson charts. Scenic flight runs at a slower, comfortable pace. Throttle changes power; altitude sets a target in Manual. Auto-trim balances the lesson’s lift and weight, independently of steering.', r:'Left / right bank into a turn. Up climbs; down dives. W / S change power. Release the controls to level off. Terrain clearance assist keeps the aircraft above the ground.', f:'On iPhone or iPad, choose Manual → Enable tilt, hold the device comfortably, then tap Recenter. Tilt sideways to bank and tip the top toward you to climb.'},
+    lighting: {t:'Light and atmosphere', w:'Morning, midday and golden hour move the sun and change the light on the landscape.', y:'Low sun gives longer shadows and warmer reflections. Midday reveals the rock layers and water more clearly.', r:'The environments are inspired by real landscapes; their geography is generated for exploration.', f:''},
     speed: { t: 'Speed', w: 'How fast the aircraft moves through the air (its airspeed).', y: 'Lift grows with the square of speed: fly twice as fast and the same wing makes four times the lift. Too slow and the wing cannot hold the aircraft up.', r: 'A Spitfire needs about 150 km/h to stay up; Concorde cruised at 2,150 km/h.', f: 'Lift = ½ × air density × speed² × wing area × lift coefficient' },
     height: { t: 'Height', w: 'Altitude above sea level.', y: 'Air gets thinner as you climb — at 11,000 m it is only a third as dense. Thin air means less drag, but the wing must fly faster (or at a steeper angle) to make the same lift, and engines lose power.', r: 'Airliners cruise at 10–12 km; Concorde flew at 18 km where the sky looks dark blue.', f: 'Standard atmosphere: temperature falls 6.5 °C per km up to 11 km' },
-    throttle: { t: 'Throttle', w: 'How much power or thrust the engine is asked to make.', y: 'If thrust is bigger than drag the aircraft climbs or speeds up; if smaller, it sinks or slows down.', r: 'Airliners cruise at about 85–90 % thrust.', f: 'Climb rate = speed × (thrust − drag) ÷ weight' },
+    throttle: { t: 'Throttle', w: 'How much power or thrust the engine is asked to make.', y: 'If thrust is bigger than drag the aircraft climbs or speeds up; if smaller, it sinks or slows down.', r: 'Cruise power depends on the aircraft, altitude, weight and weather.', f: 'Climb rate = speed × (thrust − drag) ÷ weight' },
     aoa: { t: 'Angle of attack', w: 'The angle between the wing and the oncoming air.', y: 'A bigger angle deflects more air downwards and makes more lift — until about 15°, when the air can no longer follow the curved top and the wing stalls.', r: 'Concorde landed at about 11° angle of attack, which is why its nose had to droop so pilots could see the runway.', f: 'Lift coefficient ≈ 2π × angle (in radians) for a thin wing' },
     afterburner: { t: 'Afterburner', w: 'Extra fuel is sprayed into the hot exhaust and burnt again.', y: 'It adds a lot of thrust (about 20 % on Concorde, up to 50–60 % on fighters) but uses fuel very fast.', r: 'Concorde used “reheat” for take-off and to push through the speed of sound.', f: '' },
     mast: { t: 'Fold-away engine', w: 'The glider’s propeller and engine fold up out of the fuselage on a mast.', y: 'Folded away, it adds no drag so the glider keeps its long glide. Out and running, it can climb on its own.', r: 'Self-launching gliders like the Ventus-3M climb at about 2–3 m/s under power.', f: '' },
@@ -6980,7 +7171,7 @@ const Content = (() => {
     balance: { t: 'Wing position along the body', w: 'Moves the wing forward or back while the centre of gravity stays put.', y: 'Wing further back: more stable but nose-heavy. Further forward: twitchy, then unstable.', r: 'Pilots must load aircraft so the centre of gravity stays within safe limits.', f: '' },
     profile: { t: 'Air round the wing', w: 'A slice through the wing with the air flowing past, worked out with a “panel method” — the same maths early aircraft designers used.', y: 'Air over the curved top speeds up and its pressure drops (blue); under the wing it slows and pressure rises (orange). The difference pushes the wing up. At the stall, the air breaks away from the top.', r: 'Dashes set off together: those over the top arrive first — they are not waiting for the ones underneath.', f: 'Bernoulli: pressure + ½ × density × speed² = constant' },
     liftcurve: { t: 'Lift curve', w: 'How much lift the wing makes at each angle of attack.', y: 'Lift rises in a straight line, then collapses at the stall. Delta wings keep going to 20°+ thanks to vortices over the top.', r: '', f: 'Lift coefficient = lift ÷ (½ × density × speed² × area)' },
-    dragchart: { t: 'Drag and thrust', w: 'The drag in level flight and the thrust available, at each speed.', y: 'Slow flight costs “induced” drag (making lots of lift); fast flight costs skin drag. The aircraft can hold its height wherever thrust is above drag — the green band.', r: '', f: 'Drag = ½ × density × speed² × area × drag coefficient' },
+    dragchart: { t: 'Drag and thrust', w: 'The drag in level flight and the thrust available, at each speed.', y: 'Slow flight costs “induced” drag (making lots of lift); fast flight costs skin drag. The aircraft can hold its height wherever thrust is at least as large as drag.', r: '', f: 'Drag = ½ × density × speed² × area × drag coefficient' },
     forces: { t: 'The four forces', w: 'Lift, weight, thrust and drag acting on the aircraft now.', y: 'In steady level flight, lift equals weight and thrust equals drag. Drag is split into skin friction, drag from making lift, and shock waves.', r: '', f: '' }
   };
 
@@ -7056,7 +7247,7 @@ const Content = (() => {
   document.querySelectorAll('.info').forEach(b => { b.innerHTML = C.icon('info', ''); });
 
   const S = { cfg: null, ac: null, V: 50, h: 1000, thr: 0.8, ab: false, auto: true, alpha: 3, perf: null, f: null,
-    place: 'islands', time: 'morning', weather: 'clear', build: false, fly: innerWidth >= 1280, drawer: innerHeight >= 800, chart: 'Lift', tab: 'Controls', focus: false, values: false, units: 'metric',
+    place: 'islands', time: 'morning', weather: 'clear', build: false, fly: false, drawer: false, chart: 'Lift', tab: 'Controls', focus: false, values: false, units: 'metric',
     perfDirty: true, chartDirty: true, perfT: 0, chartT: 0, open: { planform: true, engine: true }, thumbs: {}, lastVmax: -1 };
 
   /* ---------- aircraft ---------- */
@@ -7166,10 +7357,10 @@ const Content = (() => {
     return Math.max(0.05, 1 - 0.95 * Math.pow(Math.min(1, (alpha - aS + 4) / 14), 1.2));
   }
   function navigationStatus(n=FlightDirector.state){
-    if(n.mode!=='manual')return;
-    const t=n.clearance?'Terrain assist':Math.abs(n.bank)>.12?'Turning':n.verticalSpeed>.5?'Climbing':n.verticalSpeed<-.5?'Descending':'Level flight';
+    if(!FlightDirector.ready)return;
+    const paused=$('pauseBtn').getAttribute('aria-pressed')==='true';const t=paused?'Paused':n.clearance?'Terrain assist':Math.abs(n.bank)>.12?'Turning':n.verticalSpeed>.5?'Climbing':n.verticalSpeed<-.5?'Descending':'Level flight';
     const vertical=S.units==='metric'?`${n.verticalSpeed>=0?'+':''}${f1(n.verticalSpeed)} m/s`:`${n.verticalSpeed>=0?'+':''}${fmt(n.verticalSpeed*196.85)} ft/min`;
-    $('status').className='status glass';$('statusText').textContent=t;$('statusSub').textContent=`${vertical} · ${kmh(n.speed)} · ${altitude(n.alt)}`;
+    $('status').className='status glass';$('statusText').textContent=t;$('statusSub').textContent=[paused?'':vertical,...(S.fly?[]:[kmh(n.speed),altitude(n.alt)])].filter(Boolean).join(' · ');
     if($('liveStatus').textContent!==t)$('liveStatus').textContent=t;
   }
   function update() {
@@ -7181,9 +7372,10 @@ const Content = (() => {
     f.stalled = stalled; S.f = f;
     const sepX = sepFrom(alpha, f.c.aS, ac.foil);
     if(!$('spdOut').querySelector('input'))$('spdOut').textContent = kmh(S.V);
-    if(!$('altOut').querySelector('input'))$('altOut').textContent = altitude(S.h);
-    $('thrOut').textContent = !ac.spec ? 'no engine' : ac.retract && !ac.extended ? 'engine folded' : S.ab ? 'afterburner' : `${Math.round(S.thr * 100)}%`;
-    $('aoa').value = Math.max(-6, Math.min(30, alpha)); fillRange($('aoa')); $('aoaOut').textContent = `${f1(alpha)}°`;
+    const altTarget=FlightDirector.state.mode==='manual'?FlightDirector.targetAltitude:null;
+    if(!$('altOut').querySelector('input'))$('altOut').textContent=altitude(altTarget??S.h);$('altHint').hidden=altTarget===null;$('altHint').textContent=`Now ${altitude(S.h)} · terrain assist stays active`;
+    if(!$('thrOut').querySelector('input'))$('thrOut').textContent = !ac.spec ? 'no engine' : ac.retract && !ac.extended ? 'engine folded' : S.ab ? 'afterburner' : `${Math.round(S.thr * 100)}%`;
+    $('aoa').value = Math.max(-6, Math.min(30, alpha)); fillRange($('aoa')); if(!$('aoaOut').querySelector('input'))$('aoaOut').textContent = `${f1(alpha)}°`;
     ['spd', 'alt', 'thr'].forEach(i => fillRange($(i)));
     const near = !stalled && alpha > f.c.aTop - 2;
     const t = stalled ? 'Stalled' : near ? 'Near Stall' : f.roc > .4 ? 'Climbing' : f.roc < -.4 ? 'Descending' : 'Level';
@@ -7191,8 +7383,8 @@ const Content = (() => {
     const vertical = S.units === 'metric' ? `${f.roc >= 0 ? '+' : ''}${f1(f.roc)} m/s` : `${f.roc >= 0 ? '+' : ''}${fmt(f.roc * 196.85)} ft/min`;
     $('status').className = 'status glass ' + cls; $('statusText').textContent = t;
     $('statusSub').textContent = vertical + (S.fly ? '' : ` · ${kmh(S.V)} · ${altitude(S.h)}`);
-    if ($('liveStatus').textContent !== t) $('liveStatus').textContent = t;navigationStatus();
-    [['spd',kmh(S.V)],['alt',altitude(S.h)],['thr',`${Math.round(S.thr*100)} percent`],['aoa',`${f1(alpha)} degrees`]].forEach(([id,v]) => $(id).setAttribute('aria-valuetext',v));
+    if(!FlightDirector.ready&&$('liveStatus').textContent!==t)$('liveStatus').textContent=t;navigationStatus();
+    [['spd',kmh(S.V)],['alt',altitude(altTarget??S.h)],['thr',`${Math.round(S.thr*100)} percent`],['aoa',`${f1(alpha)} degrees`]].forEach(([id,v]) => $(id).setAttribute('aria-valuetext',v));
     $('trimHint').textContent = S.auto ? 'Auto-trim finds the angle that balances lift and weight.' : 'Change the angle to explore lift and the onset of stall.';
     Scene3D.set({ alpha, CL: f.c.CL, stalled, sepX, V: S.V, h: S.h, thr: ac.spec && ac.extended ? (S.ab ? 1 : S.thr) : 0, ab: S.ab && A.hasAB(ac), L: f.L, W: ac.W, T: f.T, D: f.D, extended: ac.extended });
     Scene3D.setLabels(Object.fromEntries([['lift',f.L],['weight',ac.W],['thrust',f.T],['drag',f.D]].map(([k,v])=>[k,k[0].toUpperCase()+k.slice(1)+(S.values && innerWidth >= 600 && S.chart !== 'Forces' ? ` ${kN(v)}` : '')])));
@@ -7256,7 +7448,7 @@ const Content = (() => {
     const cv={Lift:'liftChart',Drag:'dragChart',Airflow:'profile'}[S.chart];if(cv)$(cv).setAttribute('aria-label',S.chart+'. '+data[4]);
     if(!$('chartData').hidden){const rows=S.chart==='Forces'?[['Lift',kN(f.L)],['Weight',kN(S.ac.W)],['Thrust',kN(f.T)],['Drag',kN(f.D)]]:S.chart==='Lift'?A.liftCurve(S.ac,f.M,-5,20,5).map(q=>[`${q.a}°`,q.CL.toFixed(2)]):S.chart==='Drag'?A.curves(S.ac,S.h,S.thr,S.ab,S.ac.A.vTop,14).pts.map(q=>[kmh(q.V),`${kN(q.D||0)} drag / ${kN(q.T)} thrust`]):[['Air speed ratio',data[0]],['Lift',data[2]],['Airfoil',S.ac.foil.code]]; $('chartData').innerHTML=`<table><caption>${S.chart} data</caption><thead><tr><th scope="col">${S.chart==='Lift'?'Angle of attack':S.chart==='Drag'?'Speed':'Measure'}</th><th scope="col">${S.chart==='Lift'?'Lift coefficient':'Value'}</th></tr></thead><tbody>${rows.map(r=>`<tr><th scope="row">${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table>`;}
   }
-  function selectChart(name){S.chart=name;S.drawer=true;document.querySelectorAll('[data-chart]').forEach(b=>{if(b.getAttribute('role')==='tab'){b.setAttribute('aria-selected',String(b.dataset.chart===name));b.tabIndex=b.dataset.chart===name?0:-1;}});['Profile','Lift','Drag','Forces'].forEach(k=>$('card'+k).hidden=(k==='Profile'?'Airflow':k)!==name);S.chartDirty=true;update();layout();}
+  function selectChart(name){S.chart=name;$('chartSelect').value=name;S.drawer=true;if(innerWidth<1024)S.fly=false;document.querySelectorAll('[data-chart]').forEach(b=>{if(b.getAttribute('role')==='tab'){b.setAttribute('aria-selected',String(b.dataset.chart===name));b.tabIndex=b.dataset.chart===name?0:-1;}});['Profile','Lift','Drag','Forces'].forEach(k=>$('card'+k).hidden=(k==='Profile'?'Airflow':k)!==name);S.chartDirty=true;update();layout();}
   function selectTab(name){S.tab=name;document.querySelectorAll('[data-tab]').forEach(b=>{const on=b.dataset.tab===name;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;$('pane'+b.dataset.tab).hidden=!on;});try{sessionStorage.setItem('winglab-tab',name);}catch{}}
 
   /* ---------- toast ---------- */
@@ -7290,6 +7482,7 @@ const Content = (() => {
     $('timeSeg').innerHTML = Object.entries(Env.TIMES).map(([id, t]) => `<button type="button" data-time="${id}" aria-pressed="${S.time === id}">${C.icon(ti[id], '')}<span class="tb-hide-s">${t.name}</span></button>`).join('');
     $('envName').textContent = Env.PLACES[S.place].name;
   }
+  function syncPopState(){for(const [pop,btn] of [['acPop','acBtn'],['envPop','envBtn'],['overlaysPop','overlaysBtn'],['morePop','moreBtn']])$(btn).setAttribute('aria-expanded',String(!$(pop).hidden));}
   function openPop(id, anchor, alignRight) {
     ['acPop', 'envPop','overlaysPop','morePop'].forEach(p => { if (p !== id) { $(p).hidden = true; } });
     const el = $(id), was = !el.hidden;if(id==='acPop'&&was===false)makeThumbs();
@@ -7297,16 +7490,16 @@ const Content = (() => {
     for(const [pop,btn] of [['overlaysPop','overlaysBtn'],['morePop','moreBtn']])$(btn).setAttribute('aria-expanded',String(!$(pop).hidden));
     if (was) return;
     $('toast').hidden=true;clearTimeout(toastT);
-    const r = anchor.getBoundingClientRect(), w = el.offsetWidth;
+    const r = (anchor.getClientRects().length?anchor:$('moreBtn')).getBoundingClientRect(), w = el.offsetWidth;
     el.style.top = (r.bottom + 8) + 'px';
     el.style.left = Math.max(12, Math.min(innerWidth - w - 12, alignRight ? r.right - w : r.left)) + 'px';
   }
   function showInfo(key, btn) {
     const d = C.INFO[key]; if (!d) return;
     $('infoTitle').textContent = d.t; $('infoWhat').textContent = d.w; $('infoWhy').textContent = d.y;
-    $('infoReal').hidden = !d.r; $('infoReal').innerHTML = d.r ? `<b>In real life</b>${d.r}` : '';
-    $('infoFormula').hidden = !d.f; $('infoFormula').textContent = d.f;
-    const el = $('infoCard'); el.hidden = false;
+    $('infoReal').hidden = !d.r; $('infoReal').innerHTML = d.r ? `<b>${d.rLabel||'In real life'}</b>${d.r}` : '';
+    $('infoFormula').classList.toggle('help-note',key==='flight');$('infoFormula').hidden = !d.f; $('infoFormula').textContent = d.f;
+    const el = $('infoCard'); el.hidden = false;el.style.zIndex='70';
     const r = btn.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
     let left = r.left - w - 10; if (left < 12) left = Math.min(innerWidth - w - 12, r.right + 10);
     el.style.left = left + 'px'; el.style.top = Math.max(12, Math.min(innerHeight - h - 12, r.top - 20)) + 'px';
@@ -7319,32 +7512,58 @@ const Content = (() => {
     if(phone&&S.drawer)S.fly=false;
     $('build').dataset.open=String(S.build);$('build').inert=!S.build;
     $('fly').dataset.open=String(S.fly);$('fly').inert=!S.fly;
-    $('drawer').dataset.open=String(S.drawer);$('drawer').dataset.focus=String(S.focus);
-    $('drawerH').setAttribute('aria-label',S.drawer?'Collapse analysis':'Expand analysis');
+    $('drawer').hidden=!S.drawer;$('drawer').inert=!S.drawer;$('chartsBtn').setAttribute('aria-pressed',String(S.drawer));$('drawer').dataset.open=String(S.drawer);$('drawer').dataset.focus=String(S.focus);
+    $('drawerH').setAttribute('aria-label','Close analysis');if(!S.drawer)S.focus=false;
+    const tabs=$('mobileTabs'),owner=phone&&S.fly?$('fly'):$('drawer');if(tabs.parentElement!==owner)owner.append(tabs);document.querySelectorAll('[data-sheet]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sheet===(S.drawer?'Charts':S.tab==='Aircraft'?'Details':'Controls'))));
+    $('fly').dataset.expanded=String(!!S.sheetExpanded);$('inspectorHandle').setAttribute('aria-label',S.sheetExpanded?'Reduce controls sheet':'Expand controls sheet');
     $('buildBtn').setAttribute('aria-pressed',String(S.build));$('flyBtn').setAttribute('aria-pressed',String(S.fly));
     const R=!mobile&&S.fly?$('fly').offsetWidth+32:edge,L=!mobile&&S.build?$('build').offsetWidth+32:edge;
     const dr=$('drawer');dr.style.left=L+'px';dr.style.right=R+'px';
     dr.style.setProperty('--analysis-height',dr.clientWidth<760?'25rem':'21.25rem');
     $('toast').style.left=edge+'px';$('toast').style.bottom=(dr.offsetHeight+32)+'px';
     cancelAnimationFrame(layoutFrame);layoutFrame=requestAnimationFrame(()=>{
-      const rect=dr.getBoundingClientRect(),top=Math.max($('status').getBoundingClientRect().bottom,phone?$('pilotHint').getBoundingClientRect().bottom:120)+24;
+      const rect=dr.getBoundingClientRect(),top=Math.max($('status').getBoundingClientRect().bottom,110)+24;
       const right= S.fly ? (phone?edge:$('fly').offsetWidth+32):R;
-      const bottom=innerHeight-Math.min(rect.top,phone&&S.fly?$('fly').getBoundingClientRect().top:innerHeight)+24;
-      Scene3D.setInsets(L,right,bottom,top);S.chartDirty=true;
+      const touchGuide=(innerWidth<1024||matchMedia('(pointer:coarse)').matches)&&!$('pilotHint').hidden&&getComputedStyle($('pilotHint')).display!=='none',landscapeGuide=touchGuide&&innerHeight<500&&innerWidth>innerHeight;
+      const bottom=innerHeight-Math.min(S.drawer?rect.top:innerHeight,phone&&S.fly?$('fly').getBoundingClientRect().top:innerHeight,touchGuide&&!landscapeGuide?$('pilotHint').getBoundingClientRect().top:innerHeight)+24;
+      Scene3D.setInsets(landscapeGuide?$('pilotHint').getBoundingClientRect().right+16:L,right,bottom,top);S.chartDirty=true;
     });
     if(S.f)update();
   }
 
+  const tilt=TiltInput.create();let tiltOn=false,tiltWaiting=0,tiltStarted=0;
+  function stopTilt(message='Tilt to steer, or hold the arrows below.'){
+    tiltOn=false;clearTimeout(tiltWaiting);window.removeEventListener('deviceorientation',readTilt);tilt.reset();FlightDirector.setStick(0,0);
+    $('tiltBtn').textContent='Enable tilt';$('tiltBtn').setAttribute('aria-pressed','false');$('calibrateBtn').hidden=true;$('tiltStatus').textContent=message;
+  }
+  function readTilt(e){if(!tiltOn||document.hidden||!document.hasFocus())return;const a=screen.orientation?.angle??window.orientation??0;if(tilt.sample(e.beta,e.gamma,a,performance.now())){clearTimeout(tiltWaiting);$('tiltStatus').textContent='Tilt sideways to bank. Tip the top toward you to climb.';}}
+  function updateTilt(dt){if(!tiltOn)return;if(document.hidden||$('pauseBtn').getAttribute('aria-pressed')==='true'){FlightDirector.setStick(0,0);return;}const v=tilt.step(dt,performance.now());FlightDirector.setStick(v.roll,v.pull);if(!v.fresh&&performance.now()-tiltStarted>1500)$('tiltStatus').textContent='Waiting for motion. Touch arrows still work.';}
+  $('tiltBtn').onclick=async()=>{
+    if(tiltOn){stopTilt();return;}
+    if(!window.isSecureContext||!window.DeviceOrientationEvent){stopTilt('Motion unavailable here. Use the touch arrows.');return;}
+    $('tiltBtn').disabled=true;
+    try{
+      const permission=typeof DeviceOrientationEvent.requestPermission==='function'?await DeviceOrientationEvent.requestPermission():'granted';
+      if(permission!=='granted'){stopTilt('Motion permission was declined. Touch arrows still work.');return;}
+      if(FlightDirector.state.mode!=='manual')return;
+      tilt.reset();tiltOn=true;tiltStarted=performance.now();window.addEventListener('deviceorientation',readTilt);
+      $('tiltBtn').textContent='Disable tilt';$('tiltBtn').setAttribute('aria-pressed','true');$('calibrateBtn').hidden=false;$('tiltStatus').textContent='Hold comfortably. Your first position becomes level.';
+      tiltWaiting=setTimeout(()=>stopTilt('No motion sensor detected. Use the touch arrows.'),4000);
+    }catch{stopTilt('Motion could not start. Use the touch arrows.');}finally{$('tiltBtn').disabled=false;}
+  };
+  $('calibrateBtn').onclick=()=>{tilt.recenter();FlightDirector.setStick(0,0);$('tiltStatus').textContent='Centered. This position is level.';};
+  function suspendTilt(){tilt.reset();FlightDirector.clearKeys();}
+  addEventListener('blur',suspendTilt);document.addEventListener('visibilitychange',suspendTilt);
   function syncPilot(){
     const manual=FlightDirector.state.mode==='manual';
     $('pilotMode').textContent=manual?'Manual':'Autopilot';const icon=$('pilotBtn').querySelector('svg');if(icon)icon.outerHTML=C.icon(manual?'arrows':'plane');$('pilotBtn').setAttribute('aria-pressed',String(!manual));$('pilotBtn').setAttribute('aria-label',manual?'Switch to autopilot':'Switch to manual flight');
-    $('pilotHelp').textContent=manual?'Release to level · terrain assist':'A relaxed scenic tour';$('flightPad').hidden=!manual;$('manualGuide').hidden=!manual;$('pilotHint').dataset.manual=String(manual);
-    $('alt').disabled=!manual;$('altOut').setAttribute('aria-disabled',String(!manual));
+    $('pilotHint').hidden=!manual;$('navHint').textContent=manual?'Arrows or tilt steer. Altitude is a target; terrain assist keeps you above ground.':'Autopilot flies the route. Sliders set lesson airspeed and power.';if(!manual)stopTilt();$('pilotHelp').textContent=manual?'Release to level · terrain assist':'A relaxed scenic tour';$('flightPad').hidden=!manual;$('manualGuide').hidden=!manual;$('pilotHint').dataset.manual=String(manual);
+    $('altLabel').textContent=manual?'Target altitude':'Altitude';$('alt').disabled=!manual;$('altOut').setAttribute('aria-disabled',String(!manual));
     $('alt').title=manual?'Set your target altitude':'Autopilot follows the scenic route';
     layout();
   }
-  let lessonForces=true;
-  $('pilotBtn').onclick=()=>{const manual=FlightDirector.state.mode==='auto';FlightDirector.setMode(manual?'manual':'auto');FlightDirector.setThrottle(S.thr);if(manual){lessonForces=$('forcesBtn').getAttribute('aria-pressed')==='true';$('forcesBtn').setAttribute('aria-pressed','false');Scene3D.toggle('forces',false);Scene3D.setView('rear');document.querySelectorAll('#viewSeg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==='rear')));}else{$('forcesBtn').setAttribute('aria-pressed',String(lessonForces));Scene3D.toggle('forces',lessonForces);}syncPilot();};
+  let lessonForces=false;
+  $('pilotBtn').onclick=()=>{const manual=FlightDirector.state.mode==='auto';FlightDirector.setMode(manual?'manual':'auto');FlightDirector.setThrottle(S.thr);if(manual){lessonForces=$('forcesBtn').getAttribute('aria-pressed')==='true';$('forcesBtn').setAttribute('aria-pressed','false');Scene3D.toggle('forces',false);Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));}else{$('forcesBtn').setAttribute('aria-pressed',String(lessonForces));Scene3D.toggle('forces',lessonForces);}$('forceSummary').hidden=$('forcesBtn').getAttribute('aria-pressed')!=='true';syncPilot();};
   document.addEventListener('keydown',e=>{
     if(e.target.matches('input,select,textarea,[contenteditable=true]')||e.target.closest('[role=tablist],.pop,.infocard')||e.ctrlKey||e.metaKey||e.altKey)return;
     if(e.key.toLowerCase()==='p'&&!e.repeat){e.preventDefault();$('pilotBtn').click();return;}
@@ -7357,8 +7576,8 @@ const Content = (() => {
   $('viewport').addEventListener('flighttelemetry',e=>{
     const n=e.detail;$('routePhase').textContent=n.clearance?'Terrain clearance assist':n.phase;
     $('viewport').dataset.flightMode=n.mode;$('viewport').dataset.heading=n.heading.toFixed(3);$('viewport').dataset.altitude=n.alt.toFixed(1);$('viewport').dataset.worldX=n.x.toFixed(1);$('viewport').dataset.worldZ=n.z.toFixed(1);$('viewport').dataset.bank=n.bank.toFixed(3);$('viewport').dataset.pitch=n.pitch.toFixed(3);$('viewport').dataset.aileron=n.aileron.toFixed(3);$('viewport').dataset.elevator=n.elevator.toFixed(3);
-    if(n.mode==='manual'){$('manualReadout').textContent=`${kmh(n.speed)} · ${Math.round(n.throttle*100)}% power · ${Math.round(n.bank*180/Math.PI)}° bank`;if(Math.abs(S.thr-n.throttle)>.002){S.thr=n.throttle;$('thr').value=S.thr;fillRange($('thr'));S.perfDirty=true;update();}}
-    if(Math.abs(n.alt-telemetryAlt)>2||Math.abs(n.alt-S.h)>2){S.h=n.alt;telemetryAlt=n.alt;$('alt').value=S.h;if(Math.abs(S.h-(S.perfAltitude||0))>60){S.perfDirty=true;S.perfAltitude=S.h;}update();}navigationStatus(n);
+    if(n.mode==='manual'){$('manualReadout').textContent=`${Math.round(n.throttle*100)}% power · ${Math.round(n.bank*180/Math.PI)}° bank`;if(Math.abs(S.thr-n.throttle)>.002){S.thr=n.throttle;$('thr').value=S.thr;fillRange($('thr'));S.perfDirty=true;update();}}
+    if(Math.abs(n.alt-telemetryAlt)>2||Math.abs(n.alt-S.h)>2){S.h=n.alt;telemetryAlt=n.alt;$('alt').value=n.mode==='manual'?(FlightDirector.targetAltitude??S.h):S.h;if(Math.abs(S.h-(S.perfAltitude||0))>60){S.perfDirty=true;S.perfAltitude=S.h;}update();}navigationStatus(n);
   });
 
   /* ---------- wiring ---------- */
@@ -7366,7 +7585,7 @@ const Content = (() => {
     const info = e.target.closest('.info[data-info]'); if (info) { e.stopPropagation(); showInfo(info.dataset.info, info); return; }
     const o = e.target.closest('.opt[data-k]'); if (o && String(S.cfg[o.dataset.k]) !== o.dataset.id) { choose(o.dataset.k, o.dataset.id); return; }
     const g = e.target.closest('.grp-h'); if (g) { const s = g.parentElement, open = s.dataset.open !== 'true'; s.dataset.open = String(open); if (s.dataset.key) S.open[s.dataset.key] = open; return; }
-    const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true; if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();return; }
+    const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true;syncPopState(); if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();const trigger={acPop:'acBtn',envPop:'envBtn',overlaysPop:'overlaysBtn',morePop:'moreBtn',fly:'flyBtn',build:'flyBtn'}[k];if(trigger)($(trigger).getClientRects().length?$(trigger):$('moreBtn')).focus();return; }
     const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true; $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
     const pl = e.target.closest('[data-place]'); if (pl) { S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
     const tm = e.target.closest('[data-time]'); if (tm) { S.time = tm.dataset.time; Env.set('time', S.time); renderEnvPop(); return; }
@@ -7378,17 +7597,21 @@ const Content = (() => {
   $('acBtn').addEventListener('click', () => { renderPicker(); openPop('acPop', $('acBtn'), false); });
   $('envBtn').addEventListener('click', () => { renderEnvPop(); openPop('envPop', $('envBtn'), true); });
   $('buildBtn').addEventListener('click', () => { S.build = !S.build; if(S.build) S.fly=false; layout(); });
-  $('flyBtn').addEventListener('click', () => { S.fly = !S.fly; if(S.fly)S.build=false; layout(); });
-  $('drawerH').addEventListener('click', () => { S.drawer = !S.drawer; layout(); });
-  const tog = (id, key) => $(id).addEventListener('click', () => { const on = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', String(on)); Scene3D.toggle(key, on); });
+  $('flyBtn').addEventListener('click', () => { S.fly = !S.fly; if(S.fly){S.build=false;if(innerWidth<1024)S.drawer=false;} layout(); });
+  $('chartsBtn').onclick=()=>{S.drawer=!S.drawer;if(S.drawer&&innerWidth<1024){S.fly=false;S.build=false;}layout();};
+  $('drawerH').addEventListener('click', () => { S.drawer = !S.drawer; layout();if(!S.drawer)($('chartsBtn').getClientRects().length?$('chartsBtn'):$('moreBtn')).focus(); });
+  const tog = (id, key) => $(id).addEventListener('click', () => { const on = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', String(on)); Scene3D.toggle(key, on);if(key==='forces')$('forceSummary').hidden=!on; });
   tog('forcesBtn', 'forces'); tog('flowBtn', 'flow');
-  $('pauseBtn').addEventListener('click', () => { const on = $('pauseBtn').getAttribute('aria-pressed') !== 'true'; $('pauseBtn').setAttribute('aria-pressed', String(on)); $('pauseBtn').innerHTML = C.icon(on ? 'play' : 'pause');$('pauseBtn').setAttribute('aria-label',on?'Play':'Pause'); FlightDirector.clearKeys();Scene3D.pause(on); });
-  $('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Scene3D.setView(b.dataset.v); document.querySelectorAll('#viewSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
-  $('viewport').addEventListener('viewchange', () => document.querySelectorAll('#viewSeg button').forEach(x => x.setAttribute('aria-pressed', 'false')));
+  $('pauseBtn').addEventListener('click', () => { const on = $('pauseBtn').getAttribute('aria-pressed') !== 'true'; $('pauseBtn').setAttribute('aria-pressed', String(on)); $('pauseBtn').innerHTML = C.icon(on ? 'play' : 'pause');$('pauseBtn').setAttribute('aria-label',on?'Play':'Pause'); suspendTilt();Scene3D.pause(on);navigationStatus(); });
+  $('chartSelect').onchange=e=>selectChart(e.target.value);
+  $('inspectorHandle').onclick=()=>{S.sheetExpanded=!S.sheetExpanded;layout();};
+  let inspectorY=0,inspectorDragged=false;$('inspectorHandle').onpointerdown=e=>{inspectorY=e.clientY;inspectorDragged=false;e.target.setPointerCapture(e.pointerId);};$('inspectorHandle').onpointerup=e=>{const dy=e.clientY-inspectorY;if(Math.abs(dy)>20){inspectorDragged=true;if(dy<0)S.sheetExpanded=true;else if(S.sheetExpanded)S.sheetExpanded=false;else S.fly=false;layout();}};$('inspectorHandle').onclick=()=>{if(!inspectorDragged){S.sheetExpanded=!S.sheetExpanded;layout();}};
+  $('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Scene3D.setView(b.dataset.v); document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x=>x.setAttribute('aria-pressed',String((x.dataset.v||x.dataset.view)===b.dataset.v))); });
+  $('viewport').addEventListener('viewchange', () => document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x => x.setAttribute('aria-pressed', 'false')));
   $('profSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); Profile.setOpt(b.dataset.p, on); });
   const flightInput = (id, fn) => $(id).addEventListener('input', e => { fn(+e.target.value); fillRange(e.target); update(); });
   flightInput('spd', v => { S.V = v; });
-  flightInput('alt', v => { S.h = v;FlightDirector.setAltitude(v); S.perfDirty = true; });
+  flightInput('alt', v => { FlightDirector.setAltitude(v); S.perfDirty = true; });
   flightInput('thr', v => { S.thr = v;FlightDirector.setThrottle(v); S.perfDirty = true; });
   flightInput('aoa', v => { S.alpha = v; });
   $('ab').addEventListener('change', e => { S.ab = e.target.checked; S.perfDirty = true; syncControls(); update(); });
@@ -7403,10 +7626,11 @@ const Content = (() => {
   document.addEventListener('click',e=>{
     const ch=e.target.closest('[data-chart]');if(ch)selectChart(ch.dataset.chart);
     const tb=e.target.closest('[data-tab]');if(tb)selectTab(tb.dataset.tab);
-    const mv=e.target.closest('[data-view]');if(mv)Scene3D.setView(mv.dataset.view);
+    const mv=e.target.closest('[data-view]');if(mv){Scene3D.setView(mv.dataset.view);document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x=>x.setAttribute('aria-pressed',String((x.dataset.v||x.dataset.view)===mv.dataset.view)));}
     const mn=e.target.closest('[data-menu]');if(mn){$('morePop').hidden=true;$(mn.dataset.menu).click();}
-    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);
+    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);syncPopState();
   });
+  document.querySelector('.skip-link').onclick=e=>{e.preventDefault();S.fly=true;S.drawer=false;selectTab('Controls');layout();$('tabControls').focus();};
   $('status').onclick=()=>{S.fly=true;if(innerWidth<600)S.drawer=false;selectTab('Controls');layout();};
   $('overlaysBtn').onclick=()=>openPop('overlaysPop',$('overlaysBtn'),true);
   $('moreBtn').onclick=()=>openPop('morePop',$('moreBtn'),true);
@@ -7421,16 +7645,16 @@ const Content = (() => {
   $('mobileTabs').onclick=e=>{const b=e.target.closest('[data-sheet]');if(!b)return;const name=b.dataset.sheet;S.drawer=name==='Charts';S.fly=name!=='Charts';if(S.fly)selectTab(name==='Controls'?'Controls':'Aircraft');document.querySelectorAll('[data-sheet]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));layout();};
   document.querySelectorAll('.seg').forEach(group=>group.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const bs=[...group.querySelectorAll('button')],i=bs.indexOf(document.activeElement);if(i<0)return;e.preventDefault();const b=bs[e.key==='Home'?0:e.key==='End'?bs.length-1:(i+(e.key==='ArrowRight'?1:-1)+bs.length)%bs.length];b.click();b.focus();}));
   document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){['acPop','envPop','overlaysPop','morePop','infoCard'].forEach(id=>$(id).hidden=true);S.focus=false;if(innerWidth<1024)S.fly=false;layout();return;}
+    if(e.key==='Escape'){['acPop','envPop','overlaysPop','morePop','infoCard'].forEach(id=>$(id).hidden=true);S.focus=false;S.fly=false;S.build=false;S.drawer=false;syncPopState();layout();return;}
     if(e.ctrlKey||e.metaKey||e.altKey||e.target.matches('input,select,textarea'))return;
     if(e.code.startsWith('Digit')&&/[1-4]/.test(e.code.slice(-1))){e.preventDefault();const n=+e.code.slice(-1)-1;if(e.shiftKey)selectChart(['Airflow','Lift','Drag','Forces'][n]);else $('viewSeg').querySelectorAll('button')[n].click();}
     if(e.code==='Space'){e.preventDefault();if(!e.repeat)$('pauseBtn').click();}
     if(e.key.toLowerCase()==='i')$('flyBtn').click();if(e.key.toLowerCase()==='c')$('drawerH').click();if(e.key.toLowerCase()==='f')$('focusChart').click();
   });
-  $('viewport').addEventListener('click',()=>{if(innerWidth>=600&&innerWidth<1024&&S.fly){S.fly=false;layout();}});
+  $('viewport').addEventListener('click',()=>{if(innerWidth<1024&&(S.fly||S.build||S.drawer)){S.fly=false;S.build=false;S.drawer=false;layout();}});
   ['spd','alt','thr','aoa'].forEach(id=>{
     const range=$(id),out=$(id+'Out');out.tabIndex=0;out.setAttribute('role','button');out.setAttribute('aria-label','Edit '+(id==='spd'?'speed':id==='alt'?'altitude':id==='thr'?'throttle':'angle'));
-    const edit=()=>{if(range.disabled||out.querySelector('input'))return;const factor=id==='spd'?(S.units==='aviation'?1.94384:S.units==='imperial'?2.23694:3.6):id==='alt'&&S.units!=='metric'?3.28084:id==='thr'?100:1;const input=document.createElement('input');input.type='number';input.className='precise';input.min=+range.min*factor;input.max=+range.max*factor;input.step=id==='spd'?10:id==='thr'?5:range.step;input.value=(+range.value*factor).toFixed(id==='aoa'?1:0);input.setAttribute('aria-label','Precise '+({spd:'speed',alt:'altitude',thr:'throttle',aoa:'angle of attack'}[id]));out.replaceChildren(input);input.focus();input.select();let done=false;const commit=()=>{if(done)return;done=true;const n=input.value.trim()===''?NaN:Number(input.value);out.replaceChildren();if(Number.isFinite(n)){const value=Math.max(+range.min,Math.min(+range.max,n/factor));range.value=value;S[{spd:'V',alt:'h',thr:'thr',aoa:'alpha'}[id]]=value;if(id==='alt')FlightDirector.setAltitude(value);if(id==='thr')FlightDirector.setThrottle(value);S.perfDirty=true;S.chartDirty=true;}update();};input.onblur=commit;input.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){done=true;out.replaceChildren();update();}};};out.onclick=edit;out.onkeydown=e=>{if(e.key==='Enter')edit();};
+    const edit=()=>{if(range.disabled||out.querySelector('input'))return;const factor=id==='spd'?(S.units==='aviation'?1.94384:S.units==='imperial'?2.23694:3.6):id==='alt'&&S.units!=='metric'?3.28084:id==='thr'?100:1;const input=document.createElement('input');input.type='number';input.className='precise';input.min=+range.min*factor;input.max=+range.max*factor;input.step=id==='spd'?10:id==='thr'?5:range.step;input.value=(+range.value*factor).toFixed(id==='aoa'?1:0);input.setAttribute('aria-label','Precise '+({spd:'speed',alt:'altitude',thr:'throttle',aoa:'angle of attack'}[id]));out.replaceChildren(input);input.focus();input.select();let done=false;const commit=()=>{if(done)return;done=true;const n=input.value.trim()===''?NaN:Number(input.value);out.replaceChildren();if(Number.isFinite(n)){const value=Math.max(+range.min,Math.min(+range.max,n/factor));range.value=value;if(id!=='alt')S[{spd:'V',thr:'thr',aoa:'alpha'}[id]]=value;if(id==='alt')FlightDirector.setAltitude(value);if(id==='thr')FlightDirector.setThrottle(value);S.perfDirty=true;S.chartDirty=true;}update();};input.onblur=commit;input.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){done=true;out.replaceChildren();update();}};};out.onclick=edit;out.onkeydown=e=>{if(e.key==='Enter')edit();};
     range.addEventListener('keydown',e=>{if(e.shiftKey&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();range.value=+range.value+(e.key==='ArrowRight'||e.key==='ArrowUp'?1:-1)*+range.step*10;range.dispatchEvent(new Event('input',{bubbles:true}));}});
   });
   let sheetY=0;$('sheetHandle').addEventListener('pointerdown',e=>{sheetY=e.clientY;e.target.setPointerCapture(e.pointerId);});$('sheetHandle').addEventListener('pointerup',e=>{const dy=e.clientY-sheetY;if(Math.abs(dy)>20){if(dy<0){S.focus=S.drawer;S.drawer=true;}else if(S.focus)S.focus=false;else S.drawer=false;layout();}});
@@ -7449,8 +7673,8 @@ const Content = (() => {
     Env.set('place', S.place); Env.set('time', S.time); Env.set('weather', S.weather);
     loadAircraft(A.AIRCRAFT[h.get('ac')] ? h.get('ac') : 'epic');
     if (h.has('h')&&Number.isFinite(+h.get('h'))) S.h = Math.max(0,+h.get('h'));
-    if (h.get('fly') === '0') S.fly = false;
-    if (h.get('charts') === '0') S.drawer = false; }
+    if (h.get('fly') === '1') S.fly = true;
+    if (h.get('charts') === '1') S.drawer = true; }
   rebuild(); renderEnvPop(); try{selectTab(sessionStorage.getItem('winglab-tab')||'Controls');}catch{selectTab('Controls');} syncPilot(); layout();
 
   let thumbsRunning=false,thumbQueue=null;
@@ -7472,7 +7696,7 @@ const Content = (() => {
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t;
     if (S.perfDirty && t - S.perfT > 160) runPerf();
     if (S.chartDirty && t - S.chartT > 90 && S.drawer) drawCharts();
-    Scene3D.frame(dt); if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
+    updateTilt(dt);Scene3D.frame(dt); if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
     const inf = Profile.info();
     if (inf && Math.abs(inf.vmax - S.lastVmax) > 0.005) { S.lastVmax = inf.vmax;
       $('hlProfile').innerHTML = S.f.stalled || S.f.c.sig > 0.5 ? 'The air <em>breaks away</em> from the top — the wing is stalling.' : inf.vmax > 1.02 ? `Over the top, the air speeds up to <em>${inf.vmax.toFixed(1)}×</em> flight speed, so the pressure there drops.` : 'At this angle the wing makes almost no lift.'; }

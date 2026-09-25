@@ -12,7 +12,7 @@
   document.querySelectorAll('.info').forEach(b => { b.innerHTML = C.icon('info', ''); });
 
   const S = { cfg: null, ac: null, V: 50, h: 1000, thr: 0.8, ab: false, auto: true, alpha: 3, perf: null, f: null,
-    place: 'islands', time: 'morning', weather: 'clear', build: false, fly: innerWidth >= 1280, drawer: innerHeight >= 800, chart: 'Lift', tab: 'Controls', focus: false, values: false, units: 'metric',
+    place: 'islands', time: 'morning', weather: 'clear', build: false, fly: false, drawer: false, chart: 'Lift', tab: 'Controls', focus: false, values: false, units: 'metric',
     perfDirty: true, chartDirty: true, perfT: 0, chartT: 0, open: { planform: true, engine: true }, thumbs: {}, lastVmax: -1 };
 
   /* ---------- aircraft ---------- */
@@ -122,10 +122,10 @@
     return Math.max(0.05, 1 - 0.95 * Math.pow(Math.min(1, (alpha - aS + 4) / 14), 1.2));
   }
   function navigationStatus(n=FlightDirector.state){
-    if(n.mode!=='manual')return;
-    const t=n.clearance?'Terrain assist':Math.abs(n.bank)>.12?'Turning':n.verticalSpeed>.5?'Climbing':n.verticalSpeed<-.5?'Descending':'Level flight';
+    if(!FlightDirector.ready)return;
+    const paused=$('pauseBtn').getAttribute('aria-pressed')==='true';const t=paused?'Paused':n.clearance?'Terrain assist':Math.abs(n.bank)>.12?'Turning':n.verticalSpeed>.5?'Climbing':n.verticalSpeed<-.5?'Descending':'Level flight';
     const vertical=S.units==='metric'?`${n.verticalSpeed>=0?'+':''}${f1(n.verticalSpeed)} m/s`:`${n.verticalSpeed>=0?'+':''}${fmt(n.verticalSpeed*196.85)} ft/min`;
-    $('status').className='status glass';$('statusText').textContent=t;$('statusSub').textContent=`${vertical} · ${kmh(n.speed)} · ${altitude(n.alt)}`;
+    $('status').className='status glass';$('statusText').textContent=t;$('statusSub').textContent=[paused?'':vertical,...(S.fly?[]:[kmh(n.speed),altitude(n.alt)])].filter(Boolean).join(' · ');
     if($('liveStatus').textContent!==t)$('liveStatus').textContent=t;
   }
   function update() {
@@ -137,9 +137,10 @@
     f.stalled = stalled; S.f = f;
     const sepX = sepFrom(alpha, f.c.aS, ac.foil);
     if(!$('spdOut').querySelector('input'))$('spdOut').textContent = kmh(S.V);
-    if(!$('altOut').querySelector('input'))$('altOut').textContent = altitude(S.h);
-    $('thrOut').textContent = !ac.spec ? 'no engine' : ac.retract && !ac.extended ? 'engine folded' : S.ab ? 'afterburner' : `${Math.round(S.thr * 100)}%`;
-    $('aoa').value = Math.max(-6, Math.min(30, alpha)); fillRange($('aoa')); $('aoaOut').textContent = `${f1(alpha)}°`;
+    const altTarget=FlightDirector.state.mode==='manual'?FlightDirector.targetAltitude:null;
+    if(!$('altOut').querySelector('input'))$('altOut').textContent=altitude(altTarget??S.h);$('altHint').hidden=altTarget===null;$('altHint').textContent=`Now ${altitude(S.h)} · terrain assist stays active`;
+    if(!$('thrOut').querySelector('input'))$('thrOut').textContent = !ac.spec ? 'no engine' : ac.retract && !ac.extended ? 'engine folded' : S.ab ? 'afterburner' : `${Math.round(S.thr * 100)}%`;
+    $('aoa').value = Math.max(-6, Math.min(30, alpha)); fillRange($('aoa')); if(!$('aoaOut').querySelector('input'))$('aoaOut').textContent = `${f1(alpha)}°`;
     ['spd', 'alt', 'thr'].forEach(i => fillRange($(i)));
     const near = !stalled && alpha > f.c.aTop - 2;
     const t = stalled ? 'Stalled' : near ? 'Near Stall' : f.roc > .4 ? 'Climbing' : f.roc < -.4 ? 'Descending' : 'Level';
@@ -147,8 +148,8 @@
     const vertical = S.units === 'metric' ? `${f.roc >= 0 ? '+' : ''}${f1(f.roc)} m/s` : `${f.roc >= 0 ? '+' : ''}${fmt(f.roc * 196.85)} ft/min`;
     $('status').className = 'status glass ' + cls; $('statusText').textContent = t;
     $('statusSub').textContent = vertical + (S.fly ? '' : ` · ${kmh(S.V)} · ${altitude(S.h)}`);
-    if ($('liveStatus').textContent !== t) $('liveStatus').textContent = t;navigationStatus();
-    [['spd',kmh(S.V)],['alt',altitude(S.h)],['thr',`${Math.round(S.thr*100)} percent`],['aoa',`${f1(alpha)} degrees`]].forEach(([id,v]) => $(id).setAttribute('aria-valuetext',v));
+    if(!FlightDirector.ready&&$('liveStatus').textContent!==t)$('liveStatus').textContent=t;navigationStatus();
+    [['spd',kmh(S.V)],['alt',altitude(altTarget??S.h)],['thr',`${Math.round(S.thr*100)} percent`],['aoa',`${f1(alpha)} degrees`]].forEach(([id,v]) => $(id).setAttribute('aria-valuetext',v));
     $('trimHint').textContent = S.auto ? 'Auto-trim finds the angle that balances lift and weight.' : 'Change the angle to explore lift and the onset of stall.';
     Scene3D.set({ alpha, CL: f.c.CL, stalled, sepX, V: S.V, h: S.h, thr: ac.spec && ac.extended ? (S.ab ? 1 : S.thr) : 0, ab: S.ab && A.hasAB(ac), L: f.L, W: ac.W, T: f.T, D: f.D, extended: ac.extended });
     Scene3D.setLabels(Object.fromEntries([['lift',f.L],['weight',ac.W],['thrust',f.T],['drag',f.D]].map(([k,v])=>[k,k[0].toUpperCase()+k.slice(1)+(S.values && innerWidth >= 600 && S.chart !== 'Forces' ? ` ${kN(v)}` : '')])));
@@ -212,7 +213,7 @@
     const cv={Lift:'liftChart',Drag:'dragChart',Airflow:'profile'}[S.chart];if(cv)$(cv).setAttribute('aria-label',S.chart+'. '+data[4]);
     if(!$('chartData').hidden){const rows=S.chart==='Forces'?[['Lift',kN(f.L)],['Weight',kN(S.ac.W)],['Thrust',kN(f.T)],['Drag',kN(f.D)]]:S.chart==='Lift'?A.liftCurve(S.ac,f.M,-5,20,5).map(q=>[`${q.a}°`,q.CL.toFixed(2)]):S.chart==='Drag'?A.curves(S.ac,S.h,S.thr,S.ab,S.ac.A.vTop,14).pts.map(q=>[kmh(q.V),`${kN(q.D||0)} drag / ${kN(q.T)} thrust`]):[['Air speed ratio',data[0]],['Lift',data[2]],['Airfoil',S.ac.foil.code]]; $('chartData').innerHTML=`<table><caption>${S.chart} data</caption><thead><tr><th scope="col">${S.chart==='Lift'?'Angle of attack':S.chart==='Drag'?'Speed':'Measure'}</th><th scope="col">${S.chart==='Lift'?'Lift coefficient':'Value'}</th></tr></thead><tbody>${rows.map(r=>`<tr><th scope="row">${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table>`;}
   }
-  function selectChart(name){S.chart=name;S.drawer=true;document.querySelectorAll('[data-chart]').forEach(b=>{if(b.getAttribute('role')==='tab'){b.setAttribute('aria-selected',String(b.dataset.chart===name));b.tabIndex=b.dataset.chart===name?0:-1;}});['Profile','Lift','Drag','Forces'].forEach(k=>$('card'+k).hidden=(k==='Profile'?'Airflow':k)!==name);S.chartDirty=true;update();layout();}
+  function selectChart(name){S.chart=name;$('chartSelect').value=name;S.drawer=true;if(innerWidth<1024)S.fly=false;document.querySelectorAll('[data-chart]').forEach(b=>{if(b.getAttribute('role')==='tab'){b.setAttribute('aria-selected',String(b.dataset.chart===name));b.tabIndex=b.dataset.chart===name?0:-1;}});['Profile','Lift','Drag','Forces'].forEach(k=>$('card'+k).hidden=(k==='Profile'?'Airflow':k)!==name);S.chartDirty=true;update();layout();}
   function selectTab(name){S.tab=name;document.querySelectorAll('[data-tab]').forEach(b=>{const on=b.dataset.tab===name;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;$('pane'+b.dataset.tab).hidden=!on;});try{sessionStorage.setItem('winglab-tab',name);}catch{}}
 
   /* ---------- toast ---------- */
@@ -246,6 +247,7 @@
     $('timeSeg').innerHTML = Object.entries(Env.TIMES).map(([id, t]) => `<button type="button" data-time="${id}" aria-pressed="${S.time === id}">${C.icon(ti[id], '')}<span class="tb-hide-s">${t.name}</span></button>`).join('');
     $('envName').textContent = Env.PLACES[S.place].name;
   }
+  function syncPopState(){for(const [pop,btn] of [['acPop','acBtn'],['envPop','envBtn'],['overlaysPop','overlaysBtn'],['morePop','moreBtn']])$(btn).setAttribute('aria-expanded',String(!$(pop).hidden));}
   function openPop(id, anchor, alignRight) {
     ['acPop', 'envPop','overlaysPop','morePop'].forEach(p => { if (p !== id) { $(p).hidden = true; } });
     const el = $(id), was = !el.hidden;if(id==='acPop'&&was===false)makeThumbs();
@@ -253,16 +255,16 @@
     for(const [pop,btn] of [['overlaysPop','overlaysBtn'],['morePop','moreBtn']])$(btn).setAttribute('aria-expanded',String(!$(pop).hidden));
     if (was) return;
     $('toast').hidden=true;clearTimeout(toastT);
-    const r = anchor.getBoundingClientRect(), w = el.offsetWidth;
+    const r = (anchor.getClientRects().length?anchor:$('moreBtn')).getBoundingClientRect(), w = el.offsetWidth;
     el.style.top = (r.bottom + 8) + 'px';
     el.style.left = Math.max(12, Math.min(innerWidth - w - 12, alignRight ? r.right - w : r.left)) + 'px';
   }
   function showInfo(key, btn) {
     const d = C.INFO[key]; if (!d) return;
     $('infoTitle').textContent = d.t; $('infoWhat').textContent = d.w; $('infoWhy').textContent = d.y;
-    $('infoReal').hidden = !d.r; $('infoReal').innerHTML = d.r ? `<b>In real life</b>${d.r}` : '';
-    $('infoFormula').hidden = !d.f; $('infoFormula').textContent = d.f;
-    const el = $('infoCard'); el.hidden = false;
+    $('infoReal').hidden = !d.r; $('infoReal').innerHTML = d.r ? `<b>${d.rLabel||'In real life'}</b>${d.r}` : '';
+    $('infoFormula').classList.toggle('help-note',key==='flight');$('infoFormula').hidden = !d.f; $('infoFormula').textContent = d.f;
+    const el = $('infoCard'); el.hidden = false;el.style.zIndex='70';
     const r = btn.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
     let left = r.left - w - 10; if (left < 12) left = Math.min(innerWidth - w - 12, r.right + 10);
     el.style.left = left + 'px'; el.style.top = Math.max(12, Math.min(innerHeight - h - 12, r.top - 20)) + 'px';
@@ -275,32 +277,58 @@
     if(phone&&S.drawer)S.fly=false;
     $('build').dataset.open=String(S.build);$('build').inert=!S.build;
     $('fly').dataset.open=String(S.fly);$('fly').inert=!S.fly;
-    $('drawer').dataset.open=String(S.drawer);$('drawer').dataset.focus=String(S.focus);
-    $('drawerH').setAttribute('aria-label',S.drawer?'Collapse analysis':'Expand analysis');
+    $('drawer').hidden=!S.drawer;$('drawer').inert=!S.drawer;$('chartsBtn').setAttribute('aria-pressed',String(S.drawer));$('drawer').dataset.open=String(S.drawer);$('drawer').dataset.focus=String(S.focus);
+    $('drawerH').setAttribute('aria-label','Close analysis');if(!S.drawer)S.focus=false;
+    const tabs=$('mobileTabs'),owner=phone&&S.fly?$('fly'):$('drawer');if(tabs.parentElement!==owner)owner.append(tabs);document.querySelectorAll('[data-sheet]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sheet===(S.drawer?'Charts':S.tab==='Aircraft'?'Details':'Controls'))));
+    $('fly').dataset.expanded=String(!!S.sheetExpanded);$('inspectorHandle').setAttribute('aria-label',S.sheetExpanded?'Reduce controls sheet':'Expand controls sheet');
     $('buildBtn').setAttribute('aria-pressed',String(S.build));$('flyBtn').setAttribute('aria-pressed',String(S.fly));
     const R=!mobile&&S.fly?$('fly').offsetWidth+32:edge,L=!mobile&&S.build?$('build').offsetWidth+32:edge;
     const dr=$('drawer');dr.style.left=L+'px';dr.style.right=R+'px';
     dr.style.setProperty('--analysis-height',dr.clientWidth<760?'25rem':'21.25rem');
     $('toast').style.left=edge+'px';$('toast').style.bottom=(dr.offsetHeight+32)+'px';
     cancelAnimationFrame(layoutFrame);layoutFrame=requestAnimationFrame(()=>{
-      const rect=dr.getBoundingClientRect(),top=Math.max($('status').getBoundingClientRect().bottom,phone?$('pilotHint').getBoundingClientRect().bottom:120)+24;
+      const rect=dr.getBoundingClientRect(),top=Math.max($('status').getBoundingClientRect().bottom,110)+24;
       const right= S.fly ? (phone?edge:$('fly').offsetWidth+32):R;
-      const bottom=innerHeight-Math.min(rect.top,phone&&S.fly?$('fly').getBoundingClientRect().top:innerHeight)+24;
-      Scene3D.setInsets(L,right,bottom,top);S.chartDirty=true;
+      const touchGuide=(innerWidth<1024||matchMedia('(pointer:coarse)').matches)&&!$('pilotHint').hidden&&getComputedStyle($('pilotHint')).display!=='none',landscapeGuide=touchGuide&&innerHeight<500&&innerWidth>innerHeight;
+      const bottom=innerHeight-Math.min(S.drawer?rect.top:innerHeight,phone&&S.fly?$('fly').getBoundingClientRect().top:innerHeight,touchGuide&&!landscapeGuide?$('pilotHint').getBoundingClientRect().top:innerHeight)+24;
+      Scene3D.setInsets(landscapeGuide?$('pilotHint').getBoundingClientRect().right+16:L,right,bottom,top);S.chartDirty=true;
     });
     if(S.f)update();
   }
 
+  const tilt=TiltInput.create();let tiltOn=false,tiltWaiting=0,tiltStarted=0;
+  function stopTilt(message='Tilt to steer, or hold the arrows below.'){
+    tiltOn=false;clearTimeout(tiltWaiting);window.removeEventListener('deviceorientation',readTilt);tilt.reset();FlightDirector.setStick(0,0);
+    $('tiltBtn').textContent='Enable tilt';$('tiltBtn').setAttribute('aria-pressed','false');$('calibrateBtn').hidden=true;$('tiltStatus').textContent=message;
+  }
+  function readTilt(e){if(!tiltOn||document.hidden||!document.hasFocus())return;const a=screen.orientation?.angle??window.orientation??0;if(tilt.sample(e.beta,e.gamma,a,performance.now())){clearTimeout(tiltWaiting);$('tiltStatus').textContent='Tilt sideways to bank. Tip the top toward you to climb.';}}
+  function updateTilt(dt){if(!tiltOn)return;if(document.hidden||$('pauseBtn').getAttribute('aria-pressed')==='true'){FlightDirector.setStick(0,0);return;}const v=tilt.step(dt,performance.now());FlightDirector.setStick(v.roll,v.pull);if(!v.fresh&&performance.now()-tiltStarted>1500)$('tiltStatus').textContent='Waiting for motion. Touch arrows still work.';}
+  $('tiltBtn').onclick=async()=>{
+    if(tiltOn){stopTilt();return;}
+    if(!window.isSecureContext||!window.DeviceOrientationEvent){stopTilt('Motion unavailable here. Use the touch arrows.');return;}
+    $('tiltBtn').disabled=true;
+    try{
+      const permission=typeof DeviceOrientationEvent.requestPermission==='function'?await DeviceOrientationEvent.requestPermission():'granted';
+      if(permission!=='granted'){stopTilt('Motion permission was declined. Touch arrows still work.');return;}
+      if(FlightDirector.state.mode!=='manual')return;
+      tilt.reset();tiltOn=true;tiltStarted=performance.now();window.addEventListener('deviceorientation',readTilt);
+      $('tiltBtn').textContent='Disable tilt';$('tiltBtn').setAttribute('aria-pressed','true');$('calibrateBtn').hidden=false;$('tiltStatus').textContent='Hold comfortably. Your first position becomes level.';
+      tiltWaiting=setTimeout(()=>stopTilt('No motion sensor detected. Use the touch arrows.'),4000);
+    }catch{stopTilt('Motion could not start. Use the touch arrows.');}finally{$('tiltBtn').disabled=false;}
+  };
+  $('calibrateBtn').onclick=()=>{tilt.recenter();FlightDirector.setStick(0,0);$('tiltStatus').textContent='Centered. This position is level.';};
+  function suspendTilt(){tilt.reset();FlightDirector.clearKeys();}
+  addEventListener('blur',suspendTilt);document.addEventListener('visibilitychange',suspendTilt);
   function syncPilot(){
     const manual=FlightDirector.state.mode==='manual';
     $('pilotMode').textContent=manual?'Manual':'Autopilot';const icon=$('pilotBtn').querySelector('svg');if(icon)icon.outerHTML=C.icon(manual?'arrows':'plane');$('pilotBtn').setAttribute('aria-pressed',String(!manual));$('pilotBtn').setAttribute('aria-label',manual?'Switch to autopilot':'Switch to manual flight');
-    $('pilotHelp').textContent=manual?'Release to level · terrain assist':'A relaxed scenic tour';$('flightPad').hidden=!manual;$('manualGuide').hidden=!manual;$('pilotHint').dataset.manual=String(manual);
-    $('alt').disabled=!manual;$('altOut').setAttribute('aria-disabled',String(!manual));
+    $('pilotHint').hidden=!manual;$('navHint').textContent=manual?'Arrows or tilt steer. Altitude is a target; terrain assist keeps you above ground.':'Autopilot flies the route. Sliders set lesson airspeed and power.';if(!manual)stopTilt();$('pilotHelp').textContent=manual?'Release to level · terrain assist':'A relaxed scenic tour';$('flightPad').hidden=!manual;$('manualGuide').hidden=!manual;$('pilotHint').dataset.manual=String(manual);
+    $('altLabel').textContent=manual?'Target altitude':'Altitude';$('alt').disabled=!manual;$('altOut').setAttribute('aria-disabled',String(!manual));
     $('alt').title=manual?'Set your target altitude':'Autopilot follows the scenic route';
     layout();
   }
-  let lessonForces=true;
-  $('pilotBtn').onclick=()=>{const manual=FlightDirector.state.mode==='auto';FlightDirector.setMode(manual?'manual':'auto');FlightDirector.setThrottle(S.thr);if(manual){lessonForces=$('forcesBtn').getAttribute('aria-pressed')==='true';$('forcesBtn').setAttribute('aria-pressed','false');Scene3D.toggle('forces',false);Scene3D.setView('rear');document.querySelectorAll('#viewSeg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==='rear')));}else{$('forcesBtn').setAttribute('aria-pressed',String(lessonForces));Scene3D.toggle('forces',lessonForces);}syncPilot();};
+  let lessonForces=false;
+  $('pilotBtn').onclick=()=>{const manual=FlightDirector.state.mode==='auto';FlightDirector.setMode(manual?'manual':'auto');FlightDirector.setThrottle(S.thr);if(manual){lessonForces=$('forcesBtn').getAttribute('aria-pressed')==='true';$('forcesBtn').setAttribute('aria-pressed','false');Scene3D.toggle('forces',false);Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));}else{$('forcesBtn').setAttribute('aria-pressed',String(lessonForces));Scene3D.toggle('forces',lessonForces);}$('forceSummary').hidden=$('forcesBtn').getAttribute('aria-pressed')!=='true';syncPilot();};
   document.addEventListener('keydown',e=>{
     if(e.target.matches('input,select,textarea,[contenteditable=true]')||e.target.closest('[role=tablist],.pop,.infocard')||e.ctrlKey||e.metaKey||e.altKey)return;
     if(e.key.toLowerCase()==='p'&&!e.repeat){e.preventDefault();$('pilotBtn').click();return;}
@@ -313,8 +341,8 @@
   $('viewport').addEventListener('flighttelemetry',e=>{
     const n=e.detail;$('routePhase').textContent=n.clearance?'Terrain clearance assist':n.phase;
     $('viewport').dataset.flightMode=n.mode;$('viewport').dataset.heading=n.heading.toFixed(3);$('viewport').dataset.altitude=n.alt.toFixed(1);$('viewport').dataset.worldX=n.x.toFixed(1);$('viewport').dataset.worldZ=n.z.toFixed(1);$('viewport').dataset.bank=n.bank.toFixed(3);$('viewport').dataset.pitch=n.pitch.toFixed(3);$('viewport').dataset.aileron=n.aileron.toFixed(3);$('viewport').dataset.elevator=n.elevator.toFixed(3);
-    if(n.mode==='manual'){$('manualReadout').textContent=`${kmh(n.speed)} · ${Math.round(n.throttle*100)}% power · ${Math.round(n.bank*180/Math.PI)}° bank`;if(Math.abs(S.thr-n.throttle)>.002){S.thr=n.throttle;$('thr').value=S.thr;fillRange($('thr'));S.perfDirty=true;update();}}
-    if(Math.abs(n.alt-telemetryAlt)>2||Math.abs(n.alt-S.h)>2){S.h=n.alt;telemetryAlt=n.alt;$('alt').value=S.h;if(Math.abs(S.h-(S.perfAltitude||0))>60){S.perfDirty=true;S.perfAltitude=S.h;}update();}navigationStatus(n);
+    if(n.mode==='manual'){$('manualReadout').textContent=`${Math.round(n.throttle*100)}% power · ${Math.round(n.bank*180/Math.PI)}° bank`;if(Math.abs(S.thr-n.throttle)>.002){S.thr=n.throttle;$('thr').value=S.thr;fillRange($('thr'));S.perfDirty=true;update();}}
+    if(Math.abs(n.alt-telemetryAlt)>2||Math.abs(n.alt-S.h)>2){S.h=n.alt;telemetryAlt=n.alt;$('alt').value=n.mode==='manual'?(FlightDirector.targetAltitude??S.h):S.h;if(Math.abs(S.h-(S.perfAltitude||0))>60){S.perfDirty=true;S.perfAltitude=S.h;}update();}navigationStatus(n);
   });
 
   /* ---------- wiring ---------- */
@@ -322,7 +350,7 @@
     const info = e.target.closest('.info[data-info]'); if (info) { e.stopPropagation(); showInfo(info.dataset.info, info); return; }
     const o = e.target.closest('.opt[data-k]'); if (o && String(S.cfg[o.dataset.k]) !== o.dataset.id) { choose(o.dataset.k, o.dataset.id); return; }
     const g = e.target.closest('.grp-h'); if (g) { const s = g.parentElement, open = s.dataset.open !== 'true'; s.dataset.open = String(open); if (s.dataset.key) S.open[s.dataset.key] = open; return; }
-    const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true; if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();return; }
+    const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true;syncPopState(); if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();const trigger={acPop:'acBtn',envPop:'envBtn',overlaysPop:'overlaysBtn',morePop:'moreBtn',fly:'flyBtn',build:'flyBtn'}[k];if(trigger)($(trigger).getClientRects().length?$(trigger):$('moreBtn')).focus();return; }
     const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true; $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
     const pl = e.target.closest('[data-place]'); if (pl) { S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
     const tm = e.target.closest('[data-time]'); if (tm) { S.time = tm.dataset.time; Env.set('time', S.time); renderEnvPop(); return; }
@@ -334,17 +362,21 @@
   $('acBtn').addEventListener('click', () => { renderPicker(); openPop('acPop', $('acBtn'), false); });
   $('envBtn').addEventListener('click', () => { renderEnvPop(); openPop('envPop', $('envBtn'), true); });
   $('buildBtn').addEventListener('click', () => { S.build = !S.build; if(S.build) S.fly=false; layout(); });
-  $('flyBtn').addEventListener('click', () => { S.fly = !S.fly; if(S.fly)S.build=false; layout(); });
-  $('drawerH').addEventListener('click', () => { S.drawer = !S.drawer; layout(); });
-  const tog = (id, key) => $(id).addEventListener('click', () => { const on = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', String(on)); Scene3D.toggle(key, on); });
+  $('flyBtn').addEventListener('click', () => { S.fly = !S.fly; if(S.fly){S.build=false;if(innerWidth<1024)S.drawer=false;} layout(); });
+  $('chartsBtn').onclick=()=>{S.drawer=!S.drawer;if(S.drawer&&innerWidth<1024){S.fly=false;S.build=false;}layout();};
+  $('drawerH').addEventListener('click', () => { S.drawer = !S.drawer; layout();if(!S.drawer)($('chartsBtn').getClientRects().length?$('chartsBtn'):$('moreBtn')).focus(); });
+  const tog = (id, key) => $(id).addEventListener('click', () => { const on = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', String(on)); Scene3D.toggle(key, on);if(key==='forces')$('forceSummary').hidden=!on; });
   tog('forcesBtn', 'forces'); tog('flowBtn', 'flow');
-  $('pauseBtn').addEventListener('click', () => { const on = $('pauseBtn').getAttribute('aria-pressed') !== 'true'; $('pauseBtn').setAttribute('aria-pressed', String(on)); $('pauseBtn').innerHTML = C.icon(on ? 'play' : 'pause');$('pauseBtn').setAttribute('aria-label',on?'Play':'Pause'); FlightDirector.clearKeys();Scene3D.pause(on); });
-  $('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Scene3D.setView(b.dataset.v); document.querySelectorAll('#viewSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
-  $('viewport').addEventListener('viewchange', () => document.querySelectorAll('#viewSeg button').forEach(x => x.setAttribute('aria-pressed', 'false')));
+  $('pauseBtn').addEventListener('click', () => { const on = $('pauseBtn').getAttribute('aria-pressed') !== 'true'; $('pauseBtn').setAttribute('aria-pressed', String(on)); $('pauseBtn').innerHTML = C.icon(on ? 'play' : 'pause');$('pauseBtn').setAttribute('aria-label',on?'Play':'Pause'); suspendTilt();Scene3D.pause(on);navigationStatus(); });
+  $('chartSelect').onchange=e=>selectChart(e.target.value);
+  $('inspectorHandle').onclick=()=>{S.sheetExpanded=!S.sheetExpanded;layout();};
+  let inspectorY=0,inspectorDragged=false;$('inspectorHandle').onpointerdown=e=>{inspectorY=e.clientY;inspectorDragged=false;e.target.setPointerCapture(e.pointerId);};$('inspectorHandle').onpointerup=e=>{const dy=e.clientY-inspectorY;if(Math.abs(dy)>20){inspectorDragged=true;if(dy<0)S.sheetExpanded=true;else if(S.sheetExpanded)S.sheetExpanded=false;else S.fly=false;layout();}};$('inspectorHandle').onclick=()=>{if(!inspectorDragged){S.sheetExpanded=!S.sheetExpanded;layout();}};
+  $('viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; Scene3D.setView(b.dataset.v); document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x=>x.setAttribute('aria-pressed',String((x.dataset.v||x.dataset.view)===b.dataset.v))); });
+  $('viewport').addEventListener('viewchange', () => document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x => x.setAttribute('aria-pressed', 'false')));
   $('profSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); Profile.setOpt(b.dataset.p, on); });
   const flightInput = (id, fn) => $(id).addEventListener('input', e => { fn(+e.target.value); fillRange(e.target); update(); });
   flightInput('spd', v => { S.V = v; });
-  flightInput('alt', v => { S.h = v;FlightDirector.setAltitude(v); S.perfDirty = true; });
+  flightInput('alt', v => { FlightDirector.setAltitude(v); S.perfDirty = true; });
   flightInput('thr', v => { S.thr = v;FlightDirector.setThrottle(v); S.perfDirty = true; });
   flightInput('aoa', v => { S.alpha = v; });
   $('ab').addEventListener('change', e => { S.ab = e.target.checked; S.perfDirty = true; syncControls(); update(); });
@@ -359,10 +391,11 @@
   document.addEventListener('click',e=>{
     const ch=e.target.closest('[data-chart]');if(ch)selectChart(ch.dataset.chart);
     const tb=e.target.closest('[data-tab]');if(tb)selectTab(tb.dataset.tab);
-    const mv=e.target.closest('[data-view]');if(mv)Scene3D.setView(mv.dataset.view);
+    const mv=e.target.closest('[data-view]');if(mv){Scene3D.setView(mv.dataset.view);document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(x=>x.setAttribute('aria-pressed',String((x.dataset.v||x.dataset.view)===mv.dataset.view)));}
     const mn=e.target.closest('[data-menu]');if(mn){$('morePop').hidden=true;$(mn.dataset.menu).click();}
-    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);
+    if(!e.target.closest('.pop')&&!e.target.closest('#overlaysBtn')&&!e.target.closest('#moreBtn'))['overlaysPop','morePop'].forEach(id=>$(id).hidden=true);syncPopState();
   });
+  document.querySelector('.skip-link').onclick=e=>{e.preventDefault();S.fly=true;S.drawer=false;selectTab('Controls');layout();$('tabControls').focus();};
   $('status').onclick=()=>{S.fly=true;if(innerWidth<600)S.drawer=false;selectTab('Controls');layout();};
   $('overlaysBtn').onclick=()=>openPop('overlaysPop',$('overlaysBtn'),true);
   $('moreBtn').onclick=()=>openPop('morePop',$('moreBtn'),true);
@@ -377,16 +410,16 @@
   $('mobileTabs').onclick=e=>{const b=e.target.closest('[data-sheet]');if(!b)return;const name=b.dataset.sheet;S.drawer=name==='Charts';S.fly=name!=='Charts';if(S.fly)selectTab(name==='Controls'?'Controls':'Aircraft');document.querySelectorAll('[data-sheet]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));layout();};
   document.querySelectorAll('.seg').forEach(group=>group.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const bs=[...group.querySelectorAll('button')],i=bs.indexOf(document.activeElement);if(i<0)return;e.preventDefault();const b=bs[e.key==='Home'?0:e.key==='End'?bs.length-1:(i+(e.key==='ArrowRight'?1:-1)+bs.length)%bs.length];b.click();b.focus();}));
   document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){['acPop','envPop','overlaysPop','morePop','infoCard'].forEach(id=>$(id).hidden=true);S.focus=false;if(innerWidth<1024)S.fly=false;layout();return;}
+    if(e.key==='Escape'){['acPop','envPop','overlaysPop','morePop','infoCard'].forEach(id=>$(id).hidden=true);S.focus=false;S.fly=false;S.build=false;S.drawer=false;syncPopState();layout();return;}
     if(e.ctrlKey||e.metaKey||e.altKey||e.target.matches('input,select,textarea'))return;
     if(e.code.startsWith('Digit')&&/[1-4]/.test(e.code.slice(-1))){e.preventDefault();const n=+e.code.slice(-1)-1;if(e.shiftKey)selectChart(['Airflow','Lift','Drag','Forces'][n]);else $('viewSeg').querySelectorAll('button')[n].click();}
     if(e.code==='Space'){e.preventDefault();if(!e.repeat)$('pauseBtn').click();}
     if(e.key.toLowerCase()==='i')$('flyBtn').click();if(e.key.toLowerCase()==='c')$('drawerH').click();if(e.key.toLowerCase()==='f')$('focusChart').click();
   });
-  $('viewport').addEventListener('click',()=>{if(innerWidth>=600&&innerWidth<1024&&S.fly){S.fly=false;layout();}});
+  $('viewport').addEventListener('click',()=>{if(innerWidth<1024&&(S.fly||S.build||S.drawer)){S.fly=false;S.build=false;S.drawer=false;layout();}});
   ['spd','alt','thr','aoa'].forEach(id=>{
     const range=$(id),out=$(id+'Out');out.tabIndex=0;out.setAttribute('role','button');out.setAttribute('aria-label','Edit '+(id==='spd'?'speed':id==='alt'?'altitude':id==='thr'?'throttle':'angle'));
-    const edit=()=>{if(range.disabled||out.querySelector('input'))return;const factor=id==='spd'?(S.units==='aviation'?1.94384:S.units==='imperial'?2.23694:3.6):id==='alt'&&S.units!=='metric'?3.28084:id==='thr'?100:1;const input=document.createElement('input');input.type='number';input.className='precise';input.min=+range.min*factor;input.max=+range.max*factor;input.step=id==='spd'?10:id==='thr'?5:range.step;input.value=(+range.value*factor).toFixed(id==='aoa'?1:0);input.setAttribute('aria-label','Precise '+({spd:'speed',alt:'altitude',thr:'throttle',aoa:'angle of attack'}[id]));out.replaceChildren(input);input.focus();input.select();let done=false;const commit=()=>{if(done)return;done=true;const n=input.value.trim()===''?NaN:Number(input.value);out.replaceChildren();if(Number.isFinite(n)){const value=Math.max(+range.min,Math.min(+range.max,n/factor));range.value=value;S[{spd:'V',alt:'h',thr:'thr',aoa:'alpha'}[id]]=value;if(id==='alt')FlightDirector.setAltitude(value);if(id==='thr')FlightDirector.setThrottle(value);S.perfDirty=true;S.chartDirty=true;}update();};input.onblur=commit;input.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){done=true;out.replaceChildren();update();}};};out.onclick=edit;out.onkeydown=e=>{if(e.key==='Enter')edit();};
+    const edit=()=>{if(range.disabled||out.querySelector('input'))return;const factor=id==='spd'?(S.units==='aviation'?1.94384:S.units==='imperial'?2.23694:3.6):id==='alt'&&S.units!=='metric'?3.28084:id==='thr'?100:1;const input=document.createElement('input');input.type='number';input.className='precise';input.min=+range.min*factor;input.max=+range.max*factor;input.step=id==='spd'?10:id==='thr'?5:range.step;input.value=(+range.value*factor).toFixed(id==='aoa'?1:0);input.setAttribute('aria-label','Precise '+({spd:'speed',alt:'altitude',thr:'throttle',aoa:'angle of attack'}[id]));out.replaceChildren(input);input.focus();input.select();let done=false;const commit=()=>{if(done)return;done=true;const n=input.value.trim()===''?NaN:Number(input.value);out.replaceChildren();if(Number.isFinite(n)){const value=Math.max(+range.min,Math.min(+range.max,n/factor));range.value=value;if(id!=='alt')S[{spd:'V',thr:'thr',aoa:'alpha'}[id]]=value;if(id==='alt')FlightDirector.setAltitude(value);if(id==='thr')FlightDirector.setThrottle(value);S.perfDirty=true;S.chartDirty=true;}update();};input.onblur=commit;input.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){done=true;out.replaceChildren();update();}};};out.onclick=edit;out.onkeydown=e=>{if(e.key==='Enter')edit();};
     range.addEventListener('keydown',e=>{if(e.shiftKey&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();range.value=+range.value+(e.key==='ArrowRight'||e.key==='ArrowUp'?1:-1)*+range.step*10;range.dispatchEvent(new Event('input',{bubbles:true}));}});
   });
   let sheetY=0;$('sheetHandle').addEventListener('pointerdown',e=>{sheetY=e.clientY;e.target.setPointerCapture(e.pointerId);});$('sheetHandle').addEventListener('pointerup',e=>{const dy=e.clientY-sheetY;if(Math.abs(dy)>20){if(dy<0){S.focus=S.drawer;S.drawer=true;}else if(S.focus)S.focus=false;else S.drawer=false;layout();}});
@@ -405,8 +438,8 @@
     Env.set('place', S.place); Env.set('time', S.time); Env.set('weather', S.weather);
     loadAircraft(A.AIRCRAFT[h.get('ac')] ? h.get('ac') : 'epic');
     if (h.has('h')&&Number.isFinite(+h.get('h'))) S.h = Math.max(0,+h.get('h'));
-    if (h.get('fly') === '0') S.fly = false;
-    if (h.get('charts') === '0') S.drawer = false; }
+    if (h.get('fly') === '1') S.fly = true;
+    if (h.get('charts') === '1') S.drawer = true; }
   rebuild(); renderEnvPop(); try{selectTab(sessionStorage.getItem('winglab-tab')||'Controls');}catch{selectTab('Controls');} syncPilot(); layout();
 
   let thumbsRunning=false,thumbQueue=null;
@@ -428,7 +461,7 @@
     const dt = last === null ? 0 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t;
     if (S.perfDirty && t - S.perfT > 160) runPerf();
     if (S.chartDirty && t - S.chartT > 90 && S.drawer) drawCharts();
-    Scene3D.frame(dt); if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
+    updateTilt(dt);Scene3D.frame(dt); if (S.drawer && S.chart==='Airflow') { if(!matchMedia('(prefers-reduced-motion:reduce)').matches&&$('pauseBtn').getAttribute('aria-pressed')!=='true')profileTime+=dt*1000;Profile.draw(profileTime); renderAnalysis(); }
     const inf = Profile.info();
     if (inf && Math.abs(inf.vmax - S.lastVmax) > 0.005) { S.lastVmax = inf.vmax;
       $('hlProfile').innerHTML = S.f.stalled || S.f.c.sig > 0.5 ? 'The air <em>breaks away</em> from the top — the wing is stalling.' : inf.vmax > 1.02 ? `Over the top, the air speeds up to <em>${inf.vmax.toFixed(1)}×</em> flight speed, so the pressure there drops.` : 'At this angle the wing makes almost no lift.'; }

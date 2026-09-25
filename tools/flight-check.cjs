@@ -31,3 +31,11 @@ f.key('ArrowDown',true);const high=f.state.alt;for(let i=0;i<90;i++)f.step(1/30,
 f.clearKeys();f.key('ArrowLeft',true);f.key('ArrowRight',true);for(let i=0;i<180;i++)f.step(1/30,105,12);assert(Math.abs(f.state.bank)<.01,'opposite roll inputs cancel');
 const unchanged={...f.state};f.setMode('auto');for(const k of ['x','z','alt','heading','bank','pitch'])assert.equal(f.state[k],unchanged[k],'switch preserves pose');
 console.log('Game controls passed: roll/pitch inertia, coordinated turns, throttle, dives, release-to-level, opposing keys, 30/60 Hz consistency.');
+// A tight bend with real cliffs: clearance must follow the river, not a ray into its outer wall.
+const bend=Array.from({length:160},(_,i)=>({x:120*Math.cos(i/160*Math.PI*2),z:120*Math.sin(i/160*Math.PI*2)}));
+f=fresh();f.configure('canyon',bend,125);let highest=0;
+for(let i=0;i<120*30;i++){f.step(1/30,105,12,(x,z)=>Math.abs(Math.hypot(x,z)-120)>65?300:-12);highest=Math.max(highest,f.state.alt);}
+assert(highest<150,'river-following clearance stays inside a tight canyon instead of climbing over its walls');
+f=fresh();f.configure('islands',route,1500);f.setMode('manual');f.key('ArrowDown',true);for(let i=0;i<10*30;i++)f.step(1/30,105,12);assert(f.state.alt<1200,'held dive loses at least 300m in 10 seconds');
+f.clearKeys();f.setStick(.7,-.5);for(let i=0;i<90;i++)f.step(1/30,105,12);assert(f.state.bank>.4&&f.state.pitch<-.2,'analog tilt controls bank and pitch');f.clearKeys();for(let i=0;i<180;i++)f.step(1/30,105,12);assert(Math.abs(f.state.bank)<.01,'clearing input also releases the stick');
+console.log(`Tight canyon clearance passed (max altitude ${highest.toFixed(1)}m), faster descent and analog stick release passed.`);

@@ -4,7 +4,7 @@ const GTerrain = (() => {
   // tile: size of the repeating world square (m); water: sea / river level (m); track: the flight line runs along +x at this z (fraction of tile)
   const PLACES = {
     islands: { id: 0, tile: 32768, water: 0, hmax: 560, seed: 11, track: 0.5, lodK: 6, waves: 0.45, treeLine: 9000, snowLine: 99999, albedo: [0.05, 0.085, 0.09] },
-    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.3, 0.17, 0.1] }
+    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.22, 0.20, 0.17] }
   };
   const GRID = 32, DTN = 1024;
   let d, frameBuf, R = {}, P = {}, BG = {}, place = null, RES = 2048, SHRES = 1024, genDue = false, shadowDue = false, ready = false;
@@ -201,23 +201,7 @@ fn worley(uv: vec2f, cells: f32) -> vec4f {
 }
 `;
   /* shared by generation, material maps and drawing: canyon wall profiles and surface materials */
-  const SURF_WGSL = `
-fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
-fn wrapf(c: vec2f, per: f32) -> vec2f { return c - per * floor(c / per); }
-// periodic value noise (per = lattice cells per tile, so it repeats with the terrain)
-fn vnPa(p: vec2f, per: vec2f) -> f32 {   // periodic value noise with a different period per axis (stretched features)
-  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
-  let a = hash12(i - per * floor(i / per)); let b = hash12((i + vec2f(1.0, 0.0)) - per * floor((i + vec2f(1.0, 0.0)) / per));
-  let c = hash12((i + vec2f(0.0, 1.0)) - per * floor((i + vec2f(0.0, 1.0)) / per)); let e = hash12((i + vec2f(1.0, 1.0)) - per * floor((i + vec2f(1.0, 1.0)) / per));
-  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
-}
-fn vnP(p: vec2f, per: f32) -> f32 {
-  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
-  let a = hash12(wrapf(i, per)); let b = hash12(wrapf(i + vec2f(1.0, 0.0), per));
-  let c = hash12(wrapf(i + vec2f(0.0, 1.0), per)); let e = hash12(wrapf(i + vec2f(1.0, 1.0), per));
-  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
-}
-// canyon wall: height above the river (m) at distance d (m) from its centre line; a = 0 outside a bend .. 1 inside (gentler slip-off slope)
+  const CANYON_PROFILE_WGSL = `// canyon wall: height above the river (m) at distance d (m) from its centre line; a = 0 outside a bend .. 1 inside (gentler slip-off slope)
 // river bed, sandy bank, talus, lower cliff (Kayenta), bench, upper cliff (Navajo sandstone), rounded rim
 fn cprof(d: f32, a: f32) -> f32 {
   let w = 96.0; let q = sat(d / w);
@@ -245,19 +229,34 @@ fn cprofT(d: f32) -> f32 {
 }
 // A = (distance to the river, bend weight, plateau height, distance to a side canyon), B.x = side-canyon depth factor
 fn canyonH(A: vec4f, B: vec4f) -> f32 { return min(min(A.z, cprof(A.x, A.y)), mix(A.z, cprofT(A.w), B.x)); }
+`;
+  const SURF_WGSL = `
+fn lin(c: vec3f) -> vec3f { return pow(c, vec3f(2.2)); }
+fn wrapf(c: vec2f, per: f32) -> vec2f { return c - per * floor(c / per); }
+// periodic value noise (per = lattice cells per tile, so it repeats with the terrain)
+fn vnPa(p: vec2f, per: vec2f) -> f32 {   // periodic value noise with a different period per axis (stretched features)
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  let a = hash12(i - per * floor(i / per)); let b = hash12((i + vec2f(1.0, 0.0)) - per * floor((i + vec2f(1.0, 0.0)) / per));
+  let c = hash12((i + vec2f(0.0, 1.0)) - per * floor((i + vec2f(0.0, 1.0)) / per)); let e = hash12((i + vec2f(1.0, 1.0)) - per * floor((i + vec2f(1.0, 1.0)) / per));
+  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
+}
+fn vnP(p: vec2f, per: f32) -> f32 {
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  let a = hash12(wrapf(i, per)); let b = hash12(wrapf(i + vec2f(1.0, 0.0), per));
+  let c = hash12(wrapf(i + vec2f(0.0, 1.0), per)); let e = hash12(wrapf(i + vec2f(1.0, 1.0), per));
+  return mix(mix(a, b, u.x), mix(c, e, u.x), u.y);
+}
+${CANYON_PROFILE_WGSL}
 // horizontal rock layers of the Colorado Plateau by height above the river
 fn strataCol(y: f32) -> vec3f {
-  var c = lin(vec3f(0.66, 0.44, 0.32));
-  let kb = 0.5 + 0.28 * sin(y * 0.21 + 1.3 * sin(y * 0.13));
-  c = mix(c, mix(lin(vec3f(0.6, 0.34, 0.24)), lin(vec3f(0.74, 0.49, 0.37)), kb), smoothstep(40.0, 50.0, y));
-  let nb = 0.5 + 0.22 * sin(y * 0.13 + 2.0 * sin(y * .033));
-  let nav = mix(mix(lin(vec3f(0.8, 0.48, 0.29)), lin(vec3f(0.84, 0.55, 0.35)), nb), lin(vec3f(0.85, 0.62, 0.44)), smoothstep(215.0, 292.0, y));
-  c = mix(c, nav, smoothstep(155.0, 168.0, y));
-  c = mix(c, lin(vec3f(0.84, 0.66, 0.5)), smoothstep(290.0, 304.0, y) * 0.75);
-  c = mix(c, lin(vec3f(0.62, 0.38, 0.28)), smoothstep(318.0, 324.0, y));
-  let eb = 0.5 + 0.5 * sin(y * 0.19);
-  c = mix(c, mix(lin(vec3f(0.86, 0.6, 0.46)), lin(vec3f(0.93, 0.84, 0.72)), eb), smoothstep(388.0, 396.0, y));
-  c = mix(c, lin(vec3f(0.52, 0.42, 0.36)), smoothstep(540.0, 548.0, y));
+  // Muted limestone, shale and iron-bearing sandstone, in linear reflectance.
+  let beds=.5+.5*sin(y*.17+1.3*sin(y*.037));
+  var c=mix(lin(vec3f(.54,.49,.43)),lin(vec3f(.66,.57,.48)),beds*.5);
+  c=mix(c,mix(lin(vec3f(.59,.43,.36)),lin(vec3f(.70,.57,.47)),beds),smoothstep(42.0,62.0,y));
+  c=mix(c,mix(lin(vec3f(.67,.57,.47)),lin(vec3f(.77,.68,.57)),beds*.65),smoothstep(155.0,175.0,y));
+  c=mix(c,lin(vec3f(.73,.67,.57)),smoothstep(286.0,310.0,y)*.7);
+  c=mix(c,lin(vec3f(.51,.45,.40)),smoothstep(330.0,348.0,y));
+  c=mix(c,mix(lin(vec3f(.68,.54,.46)),lin(vec3f(.79,.73,.63)),beds),smoothstep(385.0,405.0,y));
   return c;
 }
 struct Surf { col: vec3f, rough: f32, rock: f32, veg: f32, sand: f32 };
@@ -271,20 +270,20 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
   var rc = strataCol(y + 5.0 * (n3 - 0.5));
   // Individual sediment beds and eroded seams, layered over the scanned stone.
   let bedPhase=y*1.65+1.6*n1+0.65*sin(y*.13+n3*8.0);
-  let bedding=pow(.5+.5*sin(bedPhase),12.0);
+  let bedding=pow(.5+.5*sin(bedPhase),8.0);
   let broken=.3+.7*vnP(uv*4096.0+2.7,4096.0);
   rc *= .94+.09*sin(y*.49+n3*3.0)-.18*bedding*broken;
-  rc = mix(rc,lin(vec3f(.39,.24,.16)),pow(smoothstep(.55,.85,n2),2.0)*.23);
+  rc = mix(rc,lin(vec3f(.35,.30,.26)),pow(smoothstep(.55,.85,n2),2.0)*.23);
   let st = 0.55 * vnP(uv * 2048.0, 2048.0) + 0.45 * vnP(uv * 512.0, 512.0);
   let rimY = select(305.0, 166.0, y < 172.0);
   let len = mix(40.0, 150.0, vnP(uv * 256.0 + 9.0, 256.0));
   let varnish = smoothstep(0.56, 0.82, st) * (0.3 + 0.7 * smoothstep(rimY - len, rimY - 4.0, y)) * smoothstep(0.5, 0.8, slope) * smoothstep(60.0, 90.0, y);
-  rc = mix(rc, lin(vec3f(0.33, 0.2, 0.14)), varnish * 0.72);
+  rc = mix(rc, lin(vec3f(0.29, 0.27, 0.25)), varnish * 0.56);
   rc *= 0.82 + 0.35 * n2;
   // flats: pale slickrock crossed by two sets of joints, orange drift sand in wind-stretched sheets, scattered shrubs
   let sn = 0.55 * vnPa(uv * vec2f(1024.0, 256.0), vec2f(1024.0, 256.0)) + 0.45 * vnP(uv * 2048.0 + 3.7, 2048.0);
   let sandy = smoothstep(0.6, 0.85, sn + 0.35 * (n3 - 0.5));
-  var fc = mix(lin(vec3f(0.8, 0.6, 0.45)), lin(vec3f(0.82, 0.52, 0.34)), sandy);
+  var fc = mix(lin(vec3f(0.69, 0.62, 0.53)), lin(vec3f(0.67, 0.56, 0.45)), sandy);
   // cross-bedded slickrock seen from above: broad sweeping bands of paler and darker rock
   let xb = fract(dot(vec2f(700.0, 420.0), uv) + 2.2 * vnP(uv * 96.0 + 2.1, 96.0) + 0.8 * vnP(uv * 384.0, 384.0));
   fc *= (0.95 + 0.1 * smoothstep(0.2, 0.5, xb) * (1.0 - smoothstep(0.55, 0.9, xb))) * (0.95 + 0.08 * n1);
@@ -294,7 +293,7 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
   let joint = max(smoothstep(0.97, 0.998, j1) * jm, smoothstep(0.975, 0.998, j2) * 0.7 * jm * jm) * (1.0 - sandy);
   fc = mix(fc, lin(vec3f(0.62, 0.44, 0.3)), joint * (0.35 + 0.35 * fine));
   fc = mix(fc, strataCol(y + 3.0) * 1.04, 0.15 + 0.45 * smoothstep(300.0, 200.0, y));
-  var veg = (0.12 * smoothstep(250.0, 295.0, y) + 0.18 * smoothstep(0.5, 0.85, n3) + 0.25 * joint) * (1.0 - rock);
+  var veg = (0.40 * smoothstep(250.0, 295.0, y) + 0.23 * smoothstep(0.4, 0.8, n3) + 0.25 * joint) * (1.0 - rock);
   fc = mix(fc, lin(vec3f(0.35, 0.34, 0.22)), 0.1 * veg);
   if (fine > 0.0) {
     // cross-bedding: fine curved laminae in the bare rock
@@ -305,10 +304,10 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
     fc = mix(fc, lin(vec3f(0.3, 0.33, 0.2)) * (0.8 + 0.4 * hash12(ci + 5.3)), shrub);
   }
   // river banks: sand bars and a ribbon of tamarisk and willow
-  let riv = smoothstep(148.0, 111.0, A.x) * smoothstep(13.0, 6.0, y) * step(-0.4, y);
+  let riv = smoothstep(148.0, 111.0, A.x) * smoothstep(32.0, 8.0, y) * step(-0.4, y);
   let rip = riv * smoothstep(0.35, 0.6, n1 + 0.35 * n2);
   fc = mix(fc, lin(vec3f(0.8, 0.69, 0.53)), riv);
-  fc = mix(fc, lin(vec3f(0.23, 0.31, 0.12)) * (0.8 + 0.4 * n2), rip);
+  fc = mix(fc, lin(vec3f(0.28, 0.34, 0.20)) * (0.8 + 0.4 * n2), rip);
   rock *= 1.0 - 0.6 * riv;
   veg = max(veg, rip);
   let wet = smoothstep(1.0, 0.1, y) * step(-0.4, y);
@@ -322,7 +321,7 @@ fn canyonSurf(uv: vec2f, y: f32, N: vec3f, A: vec4f, B: vec4f, fine: f32) -> Sur
     bc = mix(bc, lin(vec3f(0.66, 0.52, 0.5)), smoothstep(0.78, 0.86, bb));
     fc = mix(fc, bc * (0.9 + 0.2 * n2), B.y); rc = mix(rc, bc * 0.95, B.y); veg *= 1.0 - B.y;
   }
-  s.col = mix(fc, rc, rock); s.rock = rock; s.veg = veg; s.sand = sandy * (1.0 - rock);
+  let mineral=mix(fc,rc,rock);s.col=mix(mineral,vec3f(dot(mineral,vec3f(.2126,.7152,.0722))),.14); s.rock = rock; s.veg = veg; s.sand = sandy * (1.0 - rock);
   s.rough = mix(mix(0.9, 0.95, sandy), 0.84, rock) - 0.3 * wet;
   return s;
 }
@@ -466,7 +465,7 @@ fn canyonGen(uv: vec2f, dt: vec4f) -> GenOut {
   base = mix(base, 290.0 + 44.0 * mnd * mnd + (e.x - 0.5) * 26.0, bz);
   // the canyon: alcoves and buttresses bend the rim line
   // Break up the smooth wall silhouette at several geological scales.
-  let eroded=48.0*fbm(uv+.11,155.0,3,.5).x+12.0*fbm(uv+.47,680.0,3,.5).x;
+  let eroded=64.0*fbm(uv+.11,155.0,4,.5).x+17.0*fbm(uv+.47,680.0,3,.5).x;
   let pert=eroded*smoothstep(112.0,195.0,far);
   var o: GenOut;
   o.a = vec4f(max(far + pert, 0.0), sat(dt.y), base, max(dt.z + pert * 0.5, 0.0));
@@ -875,7 +874,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   let bed4 = textureSample(alb, smp, i.uv); let bed = bed4.rgb * bed4.rgb;
   let depth = max(F.water - Hs(i.uv, 0), 0.0);
   var sig = vec3f(0.25, 0.065, 0.035); var omega = vec3f(0.003, 0.031, 0.045);
-  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.008, 0.145, 0.155); }
+  if (F.place == 1u) { sig = vec3f(0.42, 0.12, 0.10); omega = vec3f(0.025, 0.115, 0.095); }
   let tr = exp(-sig * depth * 2.0);
   var col = bed * tr + omega * (1.0 - tr);
   if(F.place==1u){ // emerald shallows into blue-green channel water
@@ -1211,5 +1210,5 @@ ${GAtmos.LL}
     for(let pass=0;pass<3;pass++){const old=out.map(p=>({...p}));for(let i=0;i<out.length;i++){const a=old[(i+159)%160],b=old[i],c=old[(i+1)%160];out[i]={x:(a.x+b.x*4+c.x)/6,z:(a.z+b.z*4+c.z)/6};}}
     return out;
   }
-  return { init, setPlace, update, heightAt, hook, startPoint, scenicRoute, selectShadow, drawShadow, PLACES, get place() { return place; }, get ready() { return ready; }, get cpuReady() { return !!cpu; }, R, q, set lodK(v) { lodK = v; }, get lodK() { return lodK; }, get nNodes() { return nNodes; } };
+  return { init, setPlace, update, heightAt, hook, startPoint, scenicRoute, selectShadow, drawShadow, PLACES, get place() { return place; }, get ready() { return ready; }, get cpuReady() { return !!cpu; }, R, q, set lodK(v) { lodK = v; }, get lodK() { return lodK; }, get nNodes() { return nNodes; },canyonProfileWGSL:CANYON_PROFILE_WGSL };
 })();

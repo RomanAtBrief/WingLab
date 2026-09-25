@@ -111,7 +111,7 @@ Navigation deliberately runs at a relaxed presentation pace (22–48 m/s; canyon
 
 WebGL supports the same assisted game controls and mode switch, with an approximate scenic loop and conservative altitude floor; generated-river routing and channel search require WebGPU.
 
-Checks: `node tools/smoke-check.cjs` and `node tools/flight-check.cjs`.
+Checks: `node tools/smoke-check.cjs`, `node tools/flight-check.cjs`, `node tools/control-surfaces-check.mjs`, `node tools/tilt-check.cjs`, `node tools/waterfalls-check.cjs` and `node tools/ui-content-check.cjs`. See [mobile and canyon validation](QA-MOBILE-CANYON.md) for coverage and physical-device limitations.
 
 ## Rendering stability and previews
 
