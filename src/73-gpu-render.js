@@ -269,6 +269,7 @@ fn sky(dir: vec3f, r: f32, px: vec2f) -> vec3f {
     var amb = albedo * (1.0 - metal) * irr * ao * skyVis;
     // light bounced from the sunlit ground and walls around (canyons, valleys): what the sky cannot reach, the surroundings light up
     if (id == 2u || id == 3u) { amb += albedo * F.groundAlbedo * E * max(F.sunDir.y, 0.0) * (1.0 - skyVis) * 1.1 / PI * ao; }
+    if(F.place==1u && id==0u){amb+=albedo*(1.0-metal)*F.groundAlbedo*E*.16/PI;}
     let R = reflect(-V, N);
     let lod = sqrt(rough) * (ENV_MIPS - 1.0);
     let pre = envAt(R, lod);

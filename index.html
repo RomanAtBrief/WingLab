@@ -1884,6 +1884,73 @@ const Model = (() => {
   }
   return { build, dispose, animateControls, DEFS };
 })();
+/* Animated 3D water density, shared by both rendering backends. Metres/seconds.
+   Ballistic advection + participating spray, not a fluid pressure solver. */
+const WaterfallField = (() => {
+  const glsl = `
+float wfHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+float wfNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(wfHash(i),wfHash(i+vec3(1,0,0)),f.x),mix(wfHash(i+vec3(0,1,0)),wfHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(wfHash(i+vec3(0,0,1)),wfHash(i+vec3(1,0,1)),f.x),mix(wfHash(i+vec3(0,1,1)),wfHash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+// shape = height, lip distance from river, half-width, impact distance.
+vec2 wfDensity(vec3 p,vec4 s,float time){
+  float drop=clamp((s.x-p.y)/s.x,0.0,1.0),age=sqrt(drop),curve=mix(s.y,s.w,age);
+  float flight=sqrt(2.0*s.x/9.81)*age;
+  float strands=wfNoise(vec3(p.x*.13,flight*3.2-time*3.2,0.7));
+  float churn=wfNoise(vec3(p.x*.37,flight*9.0-time*9.0,p.z*.19));
+  float width=s.z*(.83+.12*sin(p.x*.047)+.10*drop);
+  float edge=1.0-smoothstep(width*.75,width,abs(p.x));
+  float thickness=2.8+drop*6.0;
+  float dz=(p.z-curve-2.0*sin(p.x*.08+flight*2.0-time*1.8))/thickness;
+  float channels=.18+.82*smoothstep(.23,.72,wfNoise(vec3(p.x*.12,0.7,2.1)));
+  float sheet=exp(-dz*dz)*edge*channels*(.022+.14*strands*strands+.025*churn)*smoothstep(-1.0,5.0,p.y)*(1.0-smoothstep(s.x-1.0,s.x+2.0,p.y));
+  // Air entrainment expands towards impact. Noise moves upward and downwind.
+  vec3 mq=vec3(p.x/(s.z*1.32),(p.y-20.0)/44.0,(p.z-s.w-10.0)/62.0);
+  float cloud=exp(-dot(mq,mq)*1.9);
+  float billow=wfNoise(p*.035-vec3(time*.10,time*.17,time*.04));
+  float detail=wfNoise(p*.12+vec3(time*.1,-time*.22,0));
+  float mist=cloud*max(0.0,billow*.8+detail*.3-.22)*.075;
+  // Detached droplets follow the same fall time as the curtain, outside its core.
+  vec3 cell=vec3(p.x*.52,(flight-time)*13.0,p.z*.52);
+  vec3 id=floor(cell);vec3 jitter=vec3(wfHash(id+1.1),wfHash(id+3.7),wfHash(id+7.9));
+  vec3 f=fract(cell)-mix(vec3(.18),vec3(.82),jitter);
+  float dropParticle=(1.0-smoothstep(.10,.32,length(f)))*step(.84,wfHash(floor(cell)));
+  float spray=exp(-dz*dz*.055)*edge*dropParticle*.035*drop*smoothstep(3.0,18.0,p.y)*(1.0-smoothstep(s.x-5.0,s.x,p.y));
+  float foam=exp(-pow((p.z-s.w)/58.0,2.0))*exp(-pow(p.x/(s.z*1.3),4.0))*exp(-pow((p.y-1.2)/1.8,2.0))*(.12+.18*churn);
+  return vec2(sheet+spray+foam,mist);
+}
+vec2 wfBox(vec3 ro,vec3 rd,vec3 lo,vec3 hi){vec3 inv=1.0/(rd+vec3(1e-7));vec3 a=(lo-ro)*inv,b=(hi-ro)*inv;vec3 mn=min(a,b),mx=max(a,b);return vec2(max(max(mn.x,mn.y),mn.z),min(min(mx.x,mx.y),mx.z));}
+`;
+  // A deliberately small mechanical translation keeps density/animation identical.
+  // Only this pure arithmetic kernel is translated, not general application GLSL.
+  function wgsl(){
+    let s=glsl.replace(/vec([234])\b/g,'vec$1f').replace(/\bfloat\b/g,'f32');
+    s=s.replace(/(f32|vec[234]f)\s+(\w+)\(([^)]*)\)\{/g,(_,ret,name,args)=>'fn '+name+'('+args.split(',').map(a=>{const [type,n]=a.trim().split(/\s+/);return n+': '+type;}).join(',')+')->'+ret+'{');
+    s=s.replace(/\b(f32|vec[234]f)\s+([^;]+);/g,(_,type,decl)=>{
+      let depth=0,parts=[],start=0;for(let i=0;i<decl.length;i++){if(decl[i]==='(')depth++;if(decl[i]===')')depth--;if(decl[i]===','&&!depth){parts.push(decl.slice(start,i));start=i+1;}}parts.push(decl.slice(start));
+      return parts.map(p=>'var '+p.trim().replace(/^(\w+)\s*=/,'$1: '+type+' =')+';').join('');
+    });
+    return s.replace('fn wfHash(p: vec3f)->f32{','fn wfHash(p0: vec3f)->f32{var p=p0;');
+  }
+  function glFalls(){return [600,4100,8200].map((x,i)=>{const phase=x*Math.PI*2/14000,z=1300*Math.sin(phase)+350*Math.sin(phase*2),slope=(1300*Math.cos(phase)+700*Math.cos(phase*2))*Math.PI*2/14000,n=Math.hypot(1,slope),side=i%2?-1:1;return {x,z,nx:-slope/n*side,nz:1/n*side,height:320,lip:330,width:i?58:85,end:240};});}
+  function heroes(river,heightAt){
+    let bend=0;for(let i=1;i<river.n;i++)if(Math.abs(river.cv[i])>Math.abs(river.cv[bend]))bend=i;
+    const out=[];
+    for(let k=0;k<3;k++){
+      const i=(bend+20+k*Math.floor(river.n/3))%river.n;
+      // Pick a continuous rock rim with enough fall height; try either bank.
+      let best=null;
+      for(const side of [1,-1])for(let lip=265;lip<=380;lip+=15){
+        const nx=-river.tz[i]*side,nz=river.tx[i]*side,x=river.px[i],z=river.pz[i];
+        const h=heightAt(x+nx*lip,z+nz*lip);
+        if(h<180||h>390)continue;
+        const f={x,z,nx,nz,height:h+3,lip,width:k?58:80,end:60};let clear=true;
+        for(let t=.06;t<1;t+=.04){const d=lip+(f.end-lip)*t,y=f.height*(1-t*t);if(y<heightAt(x+nx*d,z+nz*d)+2){clear=false;break;}}
+        if(clear&&(!best||h>best.height))best=f;
+      }if(best)out.push(best);
+    }return out;
+  }
+  return {glsl,wgsl,glFalls,heroes};
+})();
 /* ================= Env: physically based sky, volumetric clouds, terrain, water, weather ================= */
 const EnvGL = (() => {
   const T = THREE;
@@ -2043,7 +2110,8 @@ const EnvGL = (() => {
       return normalize(vec3(terrain(p - vec2(e, 0), o) - terrain(p + vec2(e, 0), o), 2.0 * e, terrain(p - vec2(0, e), o) - terrain(p + vec2(0, e), o))); }
 
     vec2 skyUV(vec3 d) { float el = asin(clamp(d.y, -1.0, 1.0)); return vec2(atan(d.z, d.x) / 6.2831853 + 0.5, 0.5 + 0.5 * sign(el) * sqrt(abs(el) / 1.5707963)); }
-    vec3 sky(vec3 d) { vec3 c = texture2D(uSky, skyUV(d)).rgb; float g = dot(c, vec3(0.3, 0.55, 0.15));
+    vec3 sky(vec3 d) { if(uEnv==3){vec3 blue=mix(vec3(.43,.57,.68),vec3(.055,.19,.38),smoothstep(0.0,.7,d.y));float wisps=fbm(d.xz/max(.12,d.y)*2.4,5);return mix(blue,vec3(.72,.76,.76),smoothstep(.57,.74,wisps)*smoothstep(.03,.18,d.y)*.7);}
+      vec3 c = texture2D(uSky, skyUV(d)).rgb; float g = dot(c, vec3(0.3, 0.55, 0.15));
       return mix(c, vec3(g) * vec3(0.93, 0.97, 1.04), uOvercast * 0.85) * (1.0 - 0.5 * uOvercast) + vec3(0.0006, 0.0009, 0.0018) * uNight; }
     vec3 fogColor(vec3 rd) { vec3 d = normalize(vec3(rd.x, max(rd.y, 0.015), rd.z)); float s = max(dot(d, uLight), 0.0);
       return sky(d) + uLightCol * 0.035 * pow(s, 8.0) * (1.0 - uOvercast); }
@@ -2158,7 +2226,8 @@ const EnvGL = (() => {
     void main() {
       vec3 rd = normalize(vDir), ro = uCam;
       float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      float tT = marchTerrain(ro, rd, 220000.0);
+      // The canyon uses real depth-tested meshes in CanyonWorld.
+      float tT = uEnv==3 ? -1.0 : marchTerrain(ro, rd, 220000.0);
       vec3 col;
       if (tT > 0.0) col = mix(shade(ro, rd, tT), fogColor(rd), fogAmount(ro, rd, tT));
       else {
@@ -2166,7 +2235,7 @@ const EnvGL = (() => {
         col += uSunCol * smoothstep(0.99994, 0.99998, dot(rd, uSun)) * (1.0 - uOvercast);
         if (rd.y < 0.0) col = mix(col, fogColor(rd), fogAmount(ro, rd, 220000.0));
       }
-      vec4 cl = clouds(ro, rd, tT > 0.0 ? tT : 1e9, jit);
+      vec4 cl = uEnv==3?vec4(0,0,0,1):clouds(ro, rd, tT > 0.0 ? tT : 1e9, jit);
       col = col * cl.a + cl.rgb;
       if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
       gl_FragColor = vec4(min(col, vec3(30000.0)), 1.0);
@@ -2221,7 +2290,7 @@ const EnvGL = (() => {
     if (w === 'fog') { fog = 1; overcast = 0.35; }
     if (P.env === 2) snow = Math.max(snow, 0);
     const sun = dirFrom(tm.el, tm.az), isNight = tm.el < -6;
-    const tr = transmittance(state.alt, sun.y), I = 20;
+    const tr = transmittance(state.alt, sun.y), I = state.place==='canyon'?3:20;
     u.uEnv.value = P.env; u.uHmax.value = P.hmax; u.uHaze.value = P.haze * (w === 'fog' ? 0.25 : w === 'rain' || w === 'snow' ? 0.4 : 1);
     u.uCB.value = c.base; u.uCT.value = c.top; u.uCover.value = c.cover; u.uDens.value = state.weatherEffects===false?0:c.dens; u.uCScale.value = c.scale; u.uFlat.value = c.flat;
     u.uOvercast.value = overcast; u.uFog.value = fog; u.uSnow.value = snow; u.uWet.value = wet;
@@ -2270,6 +2339,146 @@ const EnvGL = (() => {
     return envTex;
   }
   return { init, set, update, render, capture, state, out, PLACES, TIMES, WEATHER, get dirtyCapture() { return state.captureDue; } };
+})();
+/* Real mesh canyon for the WebGL compatibility path. All collision, vegetation,
+   waterfall occlusion and mesh heights use the same continuous height function. */
+const CanyonWorld = (() => {
+  const T=THREE, root=new T.Group(), falls=WaterfallField.glFalls();let ready=false,water,clock=0,depthRT,reflectionRT,waterMesh;const mirrorCamera=new T.PerspectiveCamera(),reflectMatrix=new T.Matrix4();
+  const clamp=(v)=>Math.max(0,Math.min(1,v)),sm=(a,b,v)=>{const t=clamp((v-a)/(b-a));return t*t*(3-2*t);};
+  const hash=(x,z)=>{const a=Math.sin(x*127.1+z*311.7)*43758.5453;return a-Math.floor(a);};
+  function noise(x,z){const ix=Math.floor(x),iz=Math.floor(z),a=sm(0,1,x-ix),b=sm(0,1,z-iz);return (hash(ix,iz)*(1-a)+hash(ix+1,iz)*a)*(1-b)+(hash(ix,iz+1)*(1-a)+hash(ix+1,iz+1)*a)*b;}
+  const river=x=>1300*Math.sin(x*Math.PI*2/14000)+350*Math.sin(x*Math.PI*4/14000);
+  function height(x,z){
+    const d=Math.abs(z-river(x)),b=noise(x/260,z/260),g=noise(x/69,z/69),s=d+(b-.5)*140*sm(120,260,d)+(g-.5)*32*sm(150,250,d);
+    let h=-12+10*clamp(d/108)**2+8*sm(100,126,d);
+    h+=(42+22*b)*sm(126,210,s)+(104+50*b)*sm(205,239,s)+18*sm(239,285,s)+(112+35*b)*sm(277,320,s)+28*sm(320,800,s);
+    h+=sm(130,260,d)*(noise(x/17,z/17)-.5)*4;
+    for(const f of falls){const dx=x-f.x,dz=z-f.z,along=dx*f.nz-dz*f.nx,across=dx*f.nx+dz*f.nz;
+      const basin=(1-sm(f.width*2.5,f.width*5.2,Math.abs(along)))*sm(75,160,across)*(1-sm(310,335,across));h=h*(1-basin)-5*basin;}
+    return h;
+  }
+  const heightGLSL=`
+float cwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float cwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(cwHash(i),cwHash(i+vec2(1,0)),f.x),mix(cwHash(i+vec2(0,1)),cwHash(i+vec2(1)),f.x),f.y);}
+float cwHeight(vec2 p){float phase=p.x*6.2831853/14000.0,d=abs(p.y-1300.0*sin(phase)-350.0*sin(phase*2.0)),b=cwNoise(p/260.0),g=cwNoise(p/69.0),s=d+(b-.5)*140.0*smoothstep(120.0,260.0,d)+(g-.5)*32.0*smoothstep(150.0,250.0,d);
+float h=-12.0+10.0*pow(clamp(d/108.0,0.0,1.0),2.0)+8.0*smoothstep(100.0,126.0,d);
+h+=(42.0+22.0*b)*smoothstep(126.0,210.0,s)+(104.0+50.0*b)*smoothstep(205.0,239.0,s)+18.0*smoothstep(239.0,285.0,s)+(112.0+35.0*b)*smoothstep(277.0,320.0,s)+28.0*smoothstep(320.0,800.0,s);
+h+=smoothstep(130.0,260.0,d)*(cwNoise(p/17.0)-.5)*4.0;
+${falls.map(f=>`{vec2 off=p-vec2(${f.x.toFixed(5)},${f.z.toFixed(5)});float along=dot(off,vec2(${f.nz.toFixed(8)},${(-f.nx).toFixed(8)})),across=dot(off,vec2(${f.nx.toFixed(8)},${f.nz.toFixed(8)}));float basin=(1.0-smoothstep(${(f.width*2.5).toFixed(3)},${(f.width*5.2).toFixed(3)},abs(along)))*smoothstep(75.0,160.0,across)*(1.0-smoothstep(310.0,335.0,across));h=h*(1.0-basin)-5.0*basin;}`).join('')}
+return h;}
+`;
+  root.visible=false;let pendingTextures=0;const compact=innerWidth<600;const materials=[];
+  function init(scene){
+    if(ready)return;ready=true;scene.add(root);
+    const loader=new T.TextureLoader();const load=name=>{pendingTextures++;const t=loader.load('./assets/'+name,()=>pendingTextures--,undefined,()=>pendingTextures--);t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=8;return t;};
+    const map=load('rock-color.jpg');map.colorSpace=T.SRGBColorSpace;
+    const mat=new T.MeshStandardMaterial({map,normalMap:load('rock-normal.jpg'),normalScale:new T.Vector2(.45,.45),roughness:.94,vertexColors:true});
+    mat.onBeforeCompile=shader=>{shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vRock;varying vec3 vRockN;').replace('#include <begin_vertex>','#include <begin_vertex>\nvRock=position;vRockN=normal;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vRock;varying vec3 vRockN;').replace('#include <map_fragment>',`#ifdef USE_MAP
+vec3 weights=pow(abs(vRockN),vec3(4));weights/=max(dot(weights,vec3(1)),.001);
+vec3 stone=texture2D(map,vRock.zy/9.7).rgb*weights.x+texture2D(map,vRock.xz/9.7).rgb*weights.y+texture2D(map,vRock.xy/9.7).rgb*weights.z;
+vec3 broad=texture2D(map,vec2(vRock.x*.71+vRock.z*.69,vRock.y)/37.1).rgb;
+diffuseColor.rgb*=mix(stone,broad,.32);
+#endif`).replace('#include <color_fragment>',`#include <color_fragment>
+float warp=sin(vRock.x*.008+sin(vRock.z*.013))*1.8;
+float strata=pow(.5+.5*sin(vRock.y*1.42+warp),14.0);
+float broken=.5+.5*sin(vRock.x*.051+sin(vRock.z*.037));
+diffuseColor.rgb*=1.0-.19*strata*broken;
+diffuseColor.rgb*=.91+.09*sin(vRock.y*.23+warp*.15);
+`);};
+    const rows=compact?70:100,distances=[];for(let i=-80;i<=80;i++){const q=i/80;distances.push(Math.sign(q)*(Math.abs(q)<.65?Math.abs(q)/.65*400:400+(Math.abs(q)-.65)/.35*1600));}
+    for(let chunk=-1;chunk<15;chunk++){
+      const pos=[],colors=[],uv=[],idx=[];
+      for(let a=0;a<=rows;a++)for(let b=0;b<distances.length;b++){
+        const x=chunk*1000+a*1000/rows,z=river(x)+distances[b],y=height(x,z),n=noise(x/90,z/90),bed=.5+.5*Math.sin(y*.074+n*1.4);
+        pos.push(x,y,z);uv.push((x*.75+z*.35)/9,y/9+Math.abs(distances[b])*.014);
+        const c=new T.Color().setRGB(.60+bed*.19,.235+bed*.14,.105+bed*.09);
+        const bank=1-sm(8,30,y);c.lerp(new T.Color(.40,.29,.18),bank*.7);if(y>4&&y<55)c.lerp(new T.Color(.12,.16,.055),sm(.42,.72,n)*.6);c.multiplyScalar(.75+.35*n);colors.push(c.r,c.g,c.b);
+        if(a<rows&&b<distances.length-1){const i=a*distances.length+b,j=i+distances.length;idx.push(i,i+1,j,i+1,j+1,j);}
+      }
+      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(idx);geo.computeVertexNormals();
+      const mesh=new T.Mesh(geo,mat);mesh.receiveShadow=true;mesh.castShadow=true;root.add(mesh);
+    }
+    // River is a real depth-tested surface, with moving small-scale normals.
+    water=new T.ShaderMaterial({uniforms:{uTime:{value:0},uOffset:{value:new T.Vector2()},uReflection:{value:null},uReflectMatrix:{value:reflectMatrix},uSun:{value:new T.Vector3(.6,.5,.3)}},vertexShader:`uniform mat4 uReflectMatrix;varying vec4 vReflection;varying vec3 p;varying vec3 wp;void main(){wp=(modelMatrix*vec4(position,1)).xyz;vReflection=uReflectMatrix*vec4(wp,1);p=vec3(wp.x,0,wp.z);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1);}`,fragmentShader:`precision highp float;uniform sampler2D uReflection;varying vec4 vReflection;varying vec3 p;varying vec3 wp;uniform float uTime;uniform vec2 uOffset;uniform vec3 uSun;${heightGLSL}
+void main(){vec2 q=p.xz+uOffset;float depth=max(0.0,-cwHeight(q));
+float a=cwNoise(q*.42+vec2(uTime*.45,uTime*.15))-.5,b=cwNoise(q*.83+vec2(-uTime*.25,uTime*.41))-.5,c=cwNoise(q*1.74+vec2(uTime*.62,-uTime*.24))-.5;
+vec3 n=normalize(vec3(a*.14+b*.055,1,c*.09+b*.12));vec3 v=normalize(cameraPosition-wp);
+float fr=.025+.65*pow(1.0-max(dot(v,n),0.0),5.0);vec3 body=mix(vec3(.075,.27,.22),vec3(.008,.062,.057),smoothstep(0.0,12.0,depth));
+float spec=pow(max(dot(reflect(-uSun,n),v),0.0),90.0)*.18;
+float foam=smoothstep(.72,.89,cwNoise(q*vec2(.055,.18)-vec2(uTime*.25,0.0)))*(1.0-smoothstep(1.0,5.0,depth));
+vec2 reflectionUV=vReflection.xy/vReflection.w+n.xz*.018;vec3 reflected=texture2D(uReflection,clamp(reflectionUV,.002,.998)).rgb;vec3 col=mix(body,reflected,clamp(fr,.06,.65))+spec;col=mix(col,vec3(.43,.56,.50),foam*.7);gl_FragColor=vec4(col,1);
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}`});
+    const wm=new T.Mesh(new T.PlaneGeometry(20000,12000),water);wm.rotation.x=-Math.PI/2;wm.position.set(7000,.05,0);root.add(wm);waterMesh=wm;
+    // Clustered, irregular tree crowns, with trunks and real depth silhouettes.
+    const spots=[];for(let i=0;i<(compact?3600:7000);i++){const x=hash(i,2)*16000-1000,side=i%2?1:-1,d=112+hash(i,4)*65,z=river(x)+side*d;if(noise(x/110,z/110)<.37)continue;const y=height(x,z);if(y<3||y>80)continue;spots.push({x,z,y,h:5+hash(i,7)*10});}
+    const leafCanvas=document.createElement('canvas');leafCanvas.width=leafCanvas.height=128;const brush=leafCanvas.getContext('2d');
+    for(let i=0;i<150;i++){const a=hash(i,11)*Math.PI*2,r=Math.sqrt(hash(i,12))*51,x=64+Math.cos(a)*r,y=64+Math.sin(a)*r;brush.fillStyle=`rgb(${170+Math.floor(hash(i,13)*85)},${180+Math.floor(hash(i,13)*75)},${150+Math.floor(hash(i,13)*100)})`;brush.beginPath();brush.ellipse(x,y,3+hash(i,14)*5,2+hash(i,15)*3,a,0,Math.PI*2);brush.fill();}
+    const leafMap=new T.CanvasTexture(leafCanvas);leafMap.colorSpace=T.SRGBColorSpace;
+    const lp=[],ln=[],lu=[],li=[];
+    for(let i=0;i<(compact?48:70);i++){const az=hash(i,20)*Math.PI*2,y=hash(i,21)*2-1,r=Math.sqrt(1-y*y),normal=new T.Vector3(Math.cos(az)*r,y,Math.sin(az)*r),center=normal.clone().multiplyScalar(.2+.65*hash(i,22));const right=new T.Vector3().crossVectors(normal,new T.Vector3(.13,1,.17)).normalize(),up=new T.Vector3().crossVectors(right,normal),w=.29+.15*hash(i,23);
+      for(const [x,v] of [[-1,-1],[1,-1],[-1,1],[1,1]]){const q=center.clone().addScaledVector(right,x*w).addScaledVector(up,v*w);lp.push(q.x,q.y,q.z);ln.push(normal.x,normal.y,normal.z);lu.push((x+1)/2,(v+1)/2);}const j=i*4;li.push(j,j+1,j+2,j+2,j+1,j+3);}
+    const leafGeo=new T.BufferGeometry();leafGeo.setAttribute('position',new T.Float32BufferAttribute(lp,3));leafGeo.setAttribute('normal',new T.Float32BufferAttribute(ln,3));leafGeo.setAttribute('uv',new T.Float32BufferAttribute(lu,2));leafGeo.setIndex(li);
+    const crowns=new T.InstancedMesh(leafGeo,new T.MeshStandardMaterial({color:0xffffff,map:leafMap,alphaTest:.4,side:T.DoubleSide,roughness:1}),spots.length*3);
+    const trunks=new T.InstancedMesh(new T.CylinderGeometry(.22,.45,1,5),new T.MeshStandardMaterial({color:'#514634',roughness:1}),spots.length);
+    const ob=new T.Object3D();spots.forEach((p,i)=>{ob.position.set(p.x,p.y+p.h*.35,p.z);ob.scale.set(1,p.h*.7,1);ob.updateMatrix();trunks.setMatrixAt(i,ob.matrix);
+      for(let j=0;j<3;j++){ob.position.set(p.x+(hash(i,j+4)-.5)*p.h*.6,p.y+p.h*(.55+j*.13),p.z+(hash(i,j+9)-.5)*p.h*.6);ob.scale.set(p.h*(.29+j*.02),p.h*.36,p.h*.30);ob.rotation.set(hash(i,j)*3,hash(i,j+6)*5,0);ob.updateMatrix();crowns.setMatrixAt(i*3+j,ob.matrix);crowns.setColorAt(i*3+j,new T.Color().setRGB(.08+hash(i,8)*.08,.18+hash(i,9)*.12,.025+hash(i,10)*.05));}});
+    crowns.castShadow=crowns.receiveShadow=true;root.add(crowns,trunks);
+    falls.forEach((f,k)=>{f.lip=338;f.height=height(f.x+f.nx*f.lip,f.z+f.nz*f.lip)+3;makeFall(f,k);});
+  }
+  function makeFall(f,k){
+    const axis=new T.Vector3(f.nz,0,-f.nx),normal=new T.Vector3(f.nx,0,f.nz),group=new T.Group();group.position.set(f.x,0,f.z);group.rotation.y=Math.atan2(f.nx,f.nz);root.add(group);
+    const shape=new T.Vector4(f.height,f.lip,f.width,f.end);
+    // Ray-marched 3D volume: a curved curtain, detached droplets and impact mist.
+    const material=new T.ShaderMaterial({side:T.BackSide,transparent:true,depthTest:false,depthWrite:false,uniforms:{uDepth:{value:null},uRes:{value:new T.Vector2()},uNearFar:{value:new T.Vector2()},uForward:{value:new T.Vector3()},uShape:{value:shape},uTime:{value:0},uOrigin:{value:new T.Vector3()},uWorld:{value:new T.Vector4(f.x,f.z,f.nx,f.nz)},uSun:{value:new T.Vector3()},uLight:{value:new T.Vector3(1,1,1)}},vertexShader:`varying vec3 vLocal;void main(){vLocal=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1);}`,fragmentShader:`precision highp float;
+#include <packing>
+varying vec3 vLocal;uniform sampler2D uDepth;uniform vec2 uRes,uNearFar;uniform vec3 uForward;uniform vec3 uOrigin,uSun,uLight;uniform vec4 uShape,uWorld;uniform float uTime;${WaterfallField.glsl}${heightGLSL}
+void main(){vec3 rd=normalize(vLocal-uOrigin);vec2 hit=wfBox(uOrigin,rd,vec3(-uShape.z*1.6,-3,uShape.w-120.0),vec3(uShape.z*1.6,uShape.x+5.0,uShape.y+20.0));float sceneDepth=texture2D(uDepth,gl_FragCoord.xy/uRes).r;float viewDepth=-perspectiveDepthToViewZ(sceneDepth,uNearFar.x,uNearFar.y);float limit=viewDepth/max(.001,dot(rd,uForward));float a=max(0.0,hit.x),b=min(hit.y,limit);if(b<=a)discard;
+float ds=(b-a)/96.0,tr=1.0;vec3 sum=vec3(0);for(int j=0;j<96;j++){vec3 p=uOrigin+rd*(a+(float(j)+.5)*ds);
+vec2 den=wfDensity(p,uShape,uTime);float rho=den.x+den.y;if(rho>.0005){float sha=exp(-dot(wfDensity(p+uSun*7.0,uShape,uTime),vec2(1))*7.0);float al=1.0-exp(-rho*ds);vec3 light=vec3(.18,.23,.27)+uLight*(.38+.45*sha);sum+=tr*al*light;tr*=1.0-al;if(tr<.01)break;}}
+if(tr>.998)discard;gl_FragColor=vec4(sum/max(1.0-tr,.001),1.0-tr);
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}`});
+    const geo=new T.BoxGeometry(f.width*3.2,f.height+8,f.lip-f.end+140);geo.translate(0,(f.height+2)/2,(f.lip+f.end-100)/2);
+    const volume=new T.Mesh(geo,material);volume.renderOrder=8;group.add(volume);materials.push({material,group});
+    // Explicit ballistic particles sparkle outside the dense curtain at close range.
+    const count=2400,seed=new Float32Array(count*3);for(let i=0;i<count;i++)seed.set([hash(i,2),hash(i,3),hash(i,4)],i*3);
+    const pg=new T.BufferGeometry();pg.setAttribute('position',new T.BufferAttribute(seed,3));
+    const pm=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0},uShape:{value:shape}},vertexShader:`uniform float uTime;uniform vec4 uShape;varying float alpha;void main(){float life=sqrt(2.0*uShape.x/9.81),age=fract(position.y+uTime/life);float y=uShape.x*(1.0-age*age),z=mix(uShape.y,uShape.w,age)+(position.z-.5)*(12.0+age*22.0);vec3 p=vec3((position.x-.5)*uShape.z*2.0,y,z);vec4 v=modelViewMatrix*vec4(p,1);gl_Position=projectionMatrix*v;gl_PointSize=clamp(160.0/max(1.0,-v.z),1.0,3.0);alpha=age*.38;}`,fragmentShader:`varying float alpha;void main(){float a=1.0-smoothstep(.15,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(.8,.9,.94,a*alpha);}`});
+    const points=new T.Points(pg,pm);points.frustumCulled=false;points.renderOrder=9;group.add(points);materials.push({material:pm,group});
+  }
+  function renderReflection(renderer,scene,camera){
+    if(!root.visible)return;
+    if(!reflectionRT)reflectionRT=new T.WebGLRenderTarget(compact?320:640,compact?180:360,{type:T.HalfFloatType});
+    mirrorCamera.copy(camera);mirrorCamera.clearViewOffset();mirrorCamera.projectionMatrix.copy(camera.projectionMatrix);
+    const level=root.position.y+.05,look=new T.Vector3();camera.getWorldDirection(look);look.add(camera.position);look.y=2*level-look.y;
+    mirrorCamera.position.copy(camera.position);mirrorCamera.position.y=2*level-camera.position.y;mirrorCamera.up.set(0,-1,0);mirrorCamera.lookAt(look);mirrorCamera.updateMatrixWorld();
+    reflectMatrix.set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1).multiply(mirrorCamera.projectionMatrix).multiply(mirrorCamera.matrixWorldInverse);
+    const groups=[...new Set(materials.map(x=>x.group))],vis=groups.map(g=>g.visible),clips=renderer.clippingPlanes,shadows=renderer.shadowMap.autoUpdate;
+    groups.forEach(g=>g.visible=false);waterMesh.visible=false;renderer.clippingPlanes=[new T.Plane(new T.Vector3(0,1,0),-level)];renderer.shadowMap.autoUpdate=false;
+    renderer.setRenderTarget(reflectionRT);renderer.clear();renderer.render(scene,mirrorCamera);renderer.setRenderTarget(null);
+    renderer.clippingPlanes=clips;renderer.shadowMap.autoUpdate=shadows;waterMesh.visible=true;groups.forEach((g,i)=>g.visible=vis[i]);water.uniforms.uReflection.value=reflectionRT.texture;
+  }
+  function renderDepth(renderer,scene,camera){
+    if(!root.visible)return;
+    const res=renderer.getDrawingBufferSize(new T.Vector2());
+    if(!depthRT){depthRT=new T.WebGLRenderTarget(res.x,res.y,{minFilter:T.NearestFilter,magFilter:T.NearestFilter});depthRT.depthTexture=new T.DepthTexture(res.x,res.y,T.UnsignedIntType);}
+    if(depthRT.width!==res.x||depthRT.height!==res.y)depthRT.setSize(res.x,res.y);
+    const keep=scene.overrideMaterial,bg=scene.background,groups=[...new Set(materials.map(x=>x.group))],visible=groups.map(g=>g.visible),shadows=renderer.shadowMap.autoUpdate;
+    groups.forEach(g=>g.visible=false);scene.overrideMaterial=null;scene.background=new T.Color(1,1,1);renderer.shadowMap.autoUpdate=false;
+    renderer.setRenderTarget(depthRT);renderer.clear();renderer.render(scene,camera);renderer.setRenderTarget(null);
+    scene.overrideMaterial=keep;scene.background=bg;renderer.shadowMap.autoUpdate=shadows;groups.forEach((g,i)=>g.visible=visible[i]);
+    materials.forEach(({material:m,group:g})=>{if(m.uniforms.uDepth){m.uniforms.uDepth.value=depthRT.depthTexture;m.uniforms.uRes.value.copy(res);m.uniforms.uNearFar.value.set(camera.near,camera.far);camera.getWorldDirection(m.uniforms.uForward.value);m.uniforms.uForward.value.applyAxisAngle(new T.Vector3(0,1,0),-g.rotation.y);}});
+  }
+  function update(nav,camera,env,dt){
+    if(!ready)return;root.visible=env.state.place==='canyon';if(!root.visible)return;clock+=dt;
+    const lap=Math.floor(nav.x/14000);root.position.set(lap*14000-nav.x,-nav.alt,-nav.z);root.updateMatrixWorld(true);
+    water.uniforms.uOffset.value.set(-root.position.x,-root.position.z);water.uniforms.uTime.value=clock;water.uniforms.uSun.value.copy(env.out.lightDir);
+    materials.forEach(({material:m,group:g})=>{m.uniforms.uTime.value=clock;if(m.uniforms.uOrigin){m.uniforms.uOrigin.value.copy(camera.position);g.worldToLocal(m.uniforms.uOrigin.value);m.uniforms.uSun.value.copy(env.out.lightDir).applyAxisAngle(new T.Vector3(0,1,0),-g.rotation.y);m.uniforms.uLight.value.set(env.out.lightColor.r,env.out.lightColor.g,env.out.lightColor.b).multiplyScalar(.45);}});
+  }
+  return {init,update,renderReflection,renderDepth,get ready(){return ready&&pendingTextures===0;},height,river,heightGLSL,root,falls};
 })();
 /* ================= Scene3D: renderer, camera, aircraft, airflow, forces, rain & snow ================= */
 const Scene3DGL = (() => {
@@ -2409,8 +2618,8 @@ const Scene3DGL = (() => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.outputColorSpace = T.SRGBColorSpace; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
-    scene = new T.Scene(); camera = new T.PerspectiveCamera(36, 1, 0.3, 5000);
-    EnvGL.init(renderer);
+    scene = new T.Scene(); camera = new T.PerspectiveCamera(36, 1, 0.3, 25000);
+    EnvGL.init(renderer);host.dataset.renderer="webgl";
     if (location.hash === '#lite') { perf.scale = 0.3; EnvGL.state.quality = 0.1; }
     envRT = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, depthBuffer: false }); envRT.texture.colorSpace = T.LinearSRGBColorSpace;
     scene.background = envRT.texture;
@@ -2428,7 +2637,7 @@ const Scene3DGL = (() => {
     const rt = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, samples: 4 });
     composer = new mods.EffectComposer(renderer, rt);
     composer.addPass(new mods.RenderPass(scene, camera));
-    bloom = new mods.UnrealBloomPass(new T.Vector2(256, 256), 0.32, 0.55, 1.1); composer.addPass(bloom);
+    bloom = new mods.UnrealBloomPass(new T.Vector2(256, 256), 0.10, 0.55, 1.5); composer.addPass(bloom);
     composer.addPass(new mods.OutputPass());
     // orbit with pointer, wheel and pinch
     const cv = renderer.domElement, ptrs = new Map(); let pinch = 0;
@@ -2496,11 +2705,12 @@ const Scene3DGL = (() => {
     const t0 = performance.now();
     if (paused || matchMedia('(prefers-reduced-motion:reduce)').matches) dt = 0;
     time += dt;
+    if(EnvGL.state.place==='canyon')CanyonWorld.init(scene);
     const riverZ=x=>1300*Math.sin(x*Math.PI*2/14000)+350*Math.sin(x*Math.PI*4/14000);
-    const fallbackGround=(x,z)=>{if(routePlace!=='canyon')return 850;const d=Math.abs(z-riverZ(x));return d<108?0:d<200?60:d<275?200:330;};
+    const fallbackGround=(x,z)=>routePlace==='canyon'?CanyonWorld.height(((x%14000)+14000)%14000,z):850;
     if(routePlace!==EnvGL.state.place){routePlace=EnvGL.state.place;const route=[];
-      for(let i=0;i<180;i++){const a=i/180*Math.PI*2;route.push(routePlace==='canyon'?{x:i/180*14000,z:riverZ(i/180*14000)}:{x:4000*Math.sin(a),z:3000*Math.cos(a)});}
-      if(routePlace==='canyon')route.periodX=14000;FlightDirector.configure(routePlace,route,routePlace==='canyon'?180:3000);
+      for(let i=0;i<180;i++){const a=i/180*Math.PI*2;const x=i/180*14000+250;let p={x,z:riverZ(x)};if(routePlace==='canyon'){for(const f of CanyonWorld.falls){const approach=255*Math.exp(-(((x-f.x)/360)**2));p.x+=f.nx*approach;p.z+=f.nz*approach;}}route.push(routePlace==='canyon'?p:{x:4000*Math.sin(a),z:3000*Math.cos(a)});}
+      if(routePlace==='canyon')route.periodX=14000;FlightDirector.configure(routePlace,route,routePlace==='canyon'?120:3000);
     }
     const nav=FlightDirector.step(dt,vis.V,size,fallbackGround);
     const e = 1 - Math.exp(-Math.min(dt || 0.016, 0.05) * 5);
@@ -2557,8 +2767,10 @@ const Scene3DGL = (() => {
       renderer.toneMappingExposure = o.exposure;
       hemi.color.copy(o.lightColor).multiplyScalar(0.4).addScalar(0.1);
     }
+    CanyonWorld.update(nav,camera,EnvGL,dt);
+    if(routePlace==='canyon'){const sc=sun.shadow.camera;Object.assign(sc,{left:-650,right:650,top:650,bottom:-650,near:10,far:6000});sc.updateProjectionMatrix();sun.position.copy(EnvGL.out.lightDir).multiplyScalar(2200);sun.shadow.normalBias=1.2;scene.fog ||= new T.FogExp2('#a7b9c3',.00014);hemi.intensity=1.3;hemi.color.set('#b2cbdc');hemi.groundColor.set('#765744');scene.environmentIntensity=.3;}else{scene.fog=null;scene.environmentIntensity=1;hemi.intensity=envOK===false?1.6:0;hemi.groundColor.set('#5E6A74');sun.shadow.normalBias=.02;const h=size*.75;Object.assign(sun.shadow.camera,{left:-h,right:h,top:h,bottom:-h,near:1,far:size*6});sun.shadow.camera.updateProjectionMatrix();}
     EnvGL.render(envRT, camera);
-    composer.render();host.dataset.presented='true';if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
+    CanyonWorld.renderReflection(renderer,scene,camera);CanyonWorld.renderDepth(renderer,scene,camera);composer.render();host.dataset.presented='true';host.dataset.worldX=nav.x.toFixed(1);host.dataset.worldZ=nav.z.toFixed(1);host.dataset.altitude=nav.alt.toFixed(1);host.dataset.waterfalls=routePlace==='canyon'?'3':'0';if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
     // keep the frame rate up: trade cloud and terrain detail for speed
     perf.acc += performance.now() - t0; perf.n++;
     if (perf.n >= 30) {
@@ -2581,7 +2793,7 @@ const Scene3DGL = (() => {
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
     g.putImageData(img, 0, 0); return cv.toDataURL();
   }
-  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get ready(){return host?.dataset.presented==='true';}, get view() { return viewName; } };
+  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get ready(){return host?.dataset.presented==='true'&&(EnvGL.state.place!=='canyon'||CanyonWorld.ready);}, get view() { return viewName; } };
 })();
 /* Assisted scenic navigation and a bank-to-turn flight-game controller.
    Lesson aerodynamics remain separate; this is not a certified flight simulator. */
@@ -2728,16 +2940,24 @@ const TiltInput = (() => {
 const G = (() => {
   const S = { device: null, adapter: null, ok: false, features: new Set(), errors: [] };
 
+  // Some Safari/device combinations leave adapter acquisition pending after
+  // a GPU reset. Never leave the loading screen waiting for it indefinitely.
+  async function bounded(promise,ms,disposeLate){
+    let expired=false,timer;
+    const timeout=new Promise(resolve=>{timer=setTimeout(()=>{expired=true;resolve(null);},ms);});
+    try{return await Promise.race([promise.then(value=>{if(expired){disposeLate?.(value);return null;}return value;}),timeout]);}finally{clearTimeout(timer);}
+  }
   async function probe() {
     try {
       if (!navigator.gpu || /(^|[#&])gl($|&)/.test(location.hash.slice(1))) return false;
-      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      const adapter = await bounded(navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }),6000);
       if (!adapter) return false;
       const want = ['float32-filterable', 'rg11b10ufloat-renderable'].filter(f => adapter.features.has(f));
       const L = adapter.limits, req = {};
       for (const [k, v] of Object.entries({ maxStorageTexturesPerShaderStage: 8, maxSampledTexturesPerShaderStage: 16, maxColorAttachmentBytesPerSample: 32,
         maxComputeWorkgroupStorageSize: 16384, maxStorageBufferBindingSize: 134217728, maxBufferSize: 268435456 })) if (L[k] !== undefined) req[k] = Math.min(v, L[k]);
-      const device = await adapter.requestDevice({ requiredFeatures: want, requiredLimits: req });
+      const device = await bounded(adapter.requestDevice({ requiredFeatures: want, requiredLimits: req }),6000,d=>d?.destroy());
+      if(!device)return false;
       device.lost.then(info => { console.warn('WebGPU device lost:', info.message); S.lost = true; });
       device.addEventListener('uncapturederror', e => { if (S.errors.length < 20) { S.errors.push(e.error.message); console.error('WebGPU:', e.error.message); } });
       // smaller textures on phones and tablets (memory), or when asked for with #lite
@@ -3842,6 +4062,7 @@ fn sky(dir: vec3f, r: f32, px: vec2f) -> vec3f {
     var amb = albedo * (1.0 - metal) * irr * ao * skyVis;
     // light bounced from the sunlit ground and walls around (canyons, valleys): what the sky cannot reach, the surroundings light up
     if (id == 2u || id == 3u) { amb += albedo * F.groundAlbedo * E * max(F.sunDir.y, 0.0) * (1.0 - skyVis) * 1.1 / PI * ao; }
+    if(F.place==1u && id==0u){amb+=albedo*(1.0-metal)*F.groundAlbedo*E*.16/PI;}
     let R = reflect(-V, N);
     let lod = sqrt(rough) * (ENV_MIPS - 1.0);
     let pre = envAt(R, lod);
@@ -4127,7 +4348,7 @@ const GTerrain = (() => {
   // tile: size of the repeating world square (m); water: sea / river level (m); track: the flight line runs along +x at this z (fraction of tile)
   const PLACES = {
     islands: { id: 0, tile: 32768, water: 0, hmax: 560, seed: 11, track: 0.5, lodK: 6, waves: 0.45, treeLine: 9000, snowLine: 99999, albedo: [0.05, 0.085, 0.09] },
-    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.22, 0.20, 0.17] }
+    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.32, 0.21, 0.13] }
   };
   const GRID = 32, DTN = 1024;
   let d, frameBuf, R = {}, P = {}, BG = {}, place = null, RES = 2048, SHRES = 1024, genDue = false, shadowDue = false, ready = false;
@@ -4375,7 +4596,7 @@ fn strataCol(y: f32) -> vec3f {
   // Muted limestone, shale and iron-bearing sandstone, in linear reflectance.
   let beds=.5+.5*sin(y*.17+1.3*sin(y*.037));
   var c=mix(lin(vec3f(.54,.49,.43)),lin(vec3f(.66,.57,.48)),beds*.5);
-  c=mix(c,mix(lin(vec3f(.59,.43,.36)),lin(vec3f(.70,.57,.47)),beds),smoothstep(42.0,62.0,y));
+  c=mix(c,mix(lin(vec3f(.61,.40,.28)),lin(vec3f(.70,.53,.39)),beds),smoothstep(42.0,62.0,y));
   c=mix(c,mix(lin(vec3f(.67,.57,.47)),lin(vec3f(.77,.68,.57)),beds*.65),smoothstep(155.0,175.0,y));
   c=mix(c,lin(vec3f(.73,.67,.57)),smoothstep(286.0,310.0,y)*.7);
   c=mix(c,lin(vec3f(.51,.45,.40)),smoothstep(330.0,348.0,y));
@@ -4945,7 +5166,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   col *= mix(1.0, modA / max(wr + wv + ws, 1e-3), fade);
   let scanL=max(dot(scan,vec3f(.2126,.7152,.0722)),.025);
   let chroma=clamp(scan/scanL,vec3f(.65),vec3f(1.35));
-  col*=mix(vec3f(1.0),chroma*clamp(scanL/.19,.55,1.5),wr*fade*TP.p1*.48);
+  col*=mix(vec3f(1.0),chroma*clamp(scanL/.19,.55,1.5),wr*fade*TP.p1*.72);
   let cav = mix(1.0, sat(0.6 + rk.a * 0.55), wr * fade) * mix(1.0, 0.65 + 0.45 * cano.a, wv * fade);
   rough = mix(rough, clamp(rk.a, 0.5, 1.0), wr * fade * .65);
   var o: GO;
@@ -5335,7 +5556,9 @@ ${GAtmos.LL}
   // river tile, so there is no teleport or shortcut across the plateau at the end.
   function scenicRoute(){
     if(place?.id===1&&R.river){const m=R.river,out=[];let bi=0;for(let i=0;i<m.n;i++)if(Math.abs(m.cv[i])>Math.abs(m.cv[bi]))bi=i;
-      const start=Math.max(0,bi-350);
+      const hero=typeof WaterfallField!=='undefined'?WaterfallField.heroes(m,heightAt)[0]:null;
+      if(hero){let nearest=Infinity;for(let i=0;i<m.n;i++){const d=(m.px[i]-hero.x)**2+(m.pz[i]-hero.z)**2;if(d<nearest){nearest=d;bi=i;}}}
+      const start=Math.max(0,bi-220);
       for(let i=start;i<m.n;i+=22)out.push({x:m.px[i],z:m.pz[i]});
       for(let i=0;i<start;i+=22)out.push({x:m.px[i]+place.tile,z:m.pz[i]});
       out.periodX=place.tile;return out;
@@ -5694,7 +5917,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
 /* Spring-fed canyon cascades. Ribbons follow the generated rock surface and end
    in the river; world coordinates remain fixed as the flight origin moves. */
 const GWaterfalls = (() => {
-  let pipe,buffer,bind,count=0,cascadeCount=0,terrain=null;
+  let pipe,buffer,bind,count=0,cascadeCount=0,terrain=null,volumePipe,volumeBuf,volumeBG,volumeDepth,heroes=[];
   function buildCascades(river,heightAt){
     const out=[];let bend=0;
     for(let i=1;i<river.n;i++)if(Math.abs(river.cv[i])>Math.abs(river.cv[bend]))bend=i;
@@ -5713,6 +5936,8 @@ const GWaterfalls = (() => {
     return out;
   }
   function rebuild(){
+    heroes=WaterfallField.heroes(GTerrain.R.river,GTerrain.heightAt);
+    const packed=new Float32Array(24);heroes.forEach((f,i)=>packed.set([f.x,f.z,f.nx,f.nz,f.height,f.lip,f.width,f.end],i*8));G.device.queue.writeBuffer(volumeBuf,0,packed);
     const cascades=buildCascades(GTerrain.R.river,GTerrain.heightAt),data=[];cascadeCount=cascades.length;
     function vertex(p,u,v,kind,nx,nz){data.push(p.x,p.y,p.z,u,v,kind,nx,0,nz);}
     for(const c of cascades){
@@ -5776,13 +6001,53 @@ struct VO { @builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) wp:v
   let col=albedo*daylight/PI;
   return vec4f(col*alpha,alpha);
 }`});
+    volumeBuf=G.buf(96,GPUBufferUsage.UNIFORM,new Float32Array(24));
+    volumePipe=G.render({label:'volumetric-waterfall-spray',targets:[{format:'rgba16float',blend}],code:`${G.COMMON}
+@group(0) @binding(0) var<uniform> F:Frame;
+@group(0) @binding(1) var<uniform> falls:array<vec4f,6>;
+@group(0) @binding(2) var sceneDepth:texture_depth_2d;
+${WaterfallField.wgsl()}
+struct WV{@builtin(position) p:vec4f};
+@vertex fn vs(@builtin(vertex_index) id:u32)->WV{var o:WV;let p=vec2f(f32((id<<1u)&2u),f32(id&2u));o.p=vec4f(p*2.0-1.0,0,1);return o;}
+@fragment fn fs(i:WV)->@location(0) vec4f{
+  let uv=i.p.xy*F.invRes;let ndc=vec2f(uv.x*2.0-1.0,1.0-uv.y*2.0);
+  let far=F.invViewProj*vec4f(ndc,.00001,1);let rd=normalize(far.xyz/far.w-F.camPos);
+  let depth=textureLoad(sceneDepth,vec2i(i.p.xy),0);var limit=20000.0;
+  if(depth>0.0){let h=F.invViewProj*vec4f(ndc,depth,1);limit=distance(h.xyz/h.w,F.camPos);}
+  var total=vec3f(0);var trans=1.0;
+  for(var k=0u;k<3u;k++){
+    let f=falls[k*2u];let s=falls[k*2u+1u];if(s.x<1.0){continue;}
+    var centre=f.xy-F.terrOff;centre-=round(centre/F.tile)*F.tile;
+    let axis=vec2f(f.w,-f.z);let off=F.camPos.xz-centre;
+    let ro=vec3f(dot(off,axis),F.camPos.y+F.planeAlt,dot(off,f.zw));
+    let d=vec3f(dot(rd.xz,axis),rd.y,dot(rd.xz,f.zw));
+    let hit=wfBox(ro,d,vec3f(-s.z*1.6,-3,s.w-120.0),vec3f(s.z*1.6,s.x+5.0,s.y+20.0));
+    let a=max(0.0,hit.x);let b=min(hit.y,limit);if(b<=a){continue;}
+    let ds=(b-a)/96.0;var tr=1.0;var sum=vec3f(0);
+    let sun=vec3f(dot(F.sunDir.xz,axis),F.sunDir.y,dot(F.sunDir.xz,f.zw));
+    for(var j=0u;j<96u;j++){
+      let p=ro+d*(a+(f32(j)+.5)*ds);let den=wfDensity(p,s,F.time);let rho=den.x+den.y;
+      if(rho>.0005){let sha=exp(-dot(wfDensity(p+sun*7.0,s,F.time),vec2f(1))*7.0);
+        let phase=.65+.35*pow(max(dot(rd,F.sunDir),0.0),8.0);
+        let light=F.sunE*(vec3f(.11,.15,.20)+F.lightTint*(.38+.45*sha)*phase)/PI;
+        let alpha=1.0-exp(-rho*ds);sum+=tr*alpha*light;tr*=1.0-alpha;if(tr<.012){break;}
+      }
+    }
+    total+=trans*sum;trans*=tr;
+  }
+  return vec4f(total,1.0-trans);
+}`});
     bind=null;
   }
   const hook={name:'canyon-cascades',pre(){
     if(GTerrain.place?.key!=='canyon'||!GTerrain.cpuReady){terrain=null;count=0;cascadeCount=0;return;}
     if(terrain!==GTerrain.R.river){terrain=GTerrain.R.river;rebuild();bind=G.bind(pipe,0,[GR.frameBuf,GTerrain.R.aux.createView(),GTerrain.R.aux2.createView(),G.sampler('linRepeat'),GTerrain.R.shV]);}
+  },post(enc){
+    if(GTerrain.place?.key!=='canyon'||!heroes.length)return;
+    const rt=GR.RT();if(volumeDepth!==rt.depth){volumeDepth=rt.depth;volumeBG=G.bind(volumePipe,0,[GR.frameBuf,volumeBuf,rt.V.depth]);}const bg=volumeBG;
+    const p=enc.beginRenderPass({label:'waterfall-volume',colorAttachments:[{view:rt.V.hdr,loadOp:'load',storeOp:'store'}]});p.setPipeline(volumePipe);p.setBindGroup(0,bg);p.draw(3);p.end();
   },forward(pass){if(!count)return;pass.setPipeline(pipe);pass.setBindGroup(0,bind);pass.setVertexBuffer(0,buffer);pass.draw(count);}};
-  return {init,hook,buildCascades,get count(){return cascadeCount;}};
+  return {init,hook,buildCascades,get heroes(){return heroes;},get count(){return cascadeCount;}};
 })();
 /* ================= Post: GTAO, temporal anti-aliasing, auto-exposure, bloom, lens flare ================= */
 const GPost = (() => {
@@ -7127,7 +7392,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const vp = GR.projRZ(camera, new T.Matrix4(), 0, 0).multiply(camera.matrixWorldInverse);
     updateTrails(alt, env);
     aerosolOn=show.flow&&show.weather&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
-    host.dataset.cascades=String(GWaterfalls.count);
+    host.dataset.cascades=String(GWaterfalls.count);host.dataset.waterfalls=String(GWaterfalls.heroes.length);host.dataset.renderer="webgpu";
     GTerrain.update({ worldX: world.x, worldZ: world.z, env }, camera, vp);
     GShadow.update(camera, size, alt - Math.max(ground, TP.water), env.sunDir, alt);
     envTimer -= dt;
@@ -7689,7 +7954,7 @@ const Content = (() => {
     const g = e.target.closest('.grp-h'); if (g) { const s = g.parentElement, open = s.dataset.open !== 'true'; s.dataset.open = String(open); if (s.dataset.key) S.open[s.dataset.key] = open; return; }
     const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true;syncPopState(); if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();const trigger={acPop:'acBtn',envPop:'envBtn',overlaysPop:'overlaysBtn',morePop:'moreBtn',fly:'flyBtn',build:'flyBtn'}[k];if(trigger)($(trigger).getClientRects().length?$(trigger):$('moreBtn')).focus();return; }
     const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true;layout(); $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
-    const pl = e.target.closest('[data-place]'); if (pl) { if(S.place!==pl.dataset.place){S.loaded=false;$('loading').hidden=false;$('loading').style.opacity='1';$('loadingMessage').textContent='Preparing your flight…';}S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
+    const pl = e.target.closest('[data-place]'); if (pl) { if(S.place!==pl.dataset.place){S.loaded=false;$('loading').hidden=false;$('loading').style.opacity='1';$('loadingMessage').textContent='Preparing your flight…';}S.place = pl.dataset.place; Env.set('place', S.place);if(S.place==='canyon'){Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));} S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
     const tm = e.target.closest('[data-time]'); if (tm) { S.time = tm.dataset.time; Env.set('time', S.time); renderEnvPop(); return; }
     const wx = e.target.closest('[data-wx]'); if (wx) { S.weather = wx.dataset.wx; Env.set('weather', S.weather); renderEnvPop(); return; }
     if (!e.target.closest('.infocard')) $('infoCard').hidden = true;
@@ -7775,6 +8040,7 @@ const Content = (() => {
     Env.set('place', S.place); Env.set('time', S.time); Env.set('weather', S.weather);
     loadAircraft(A.AIRCRAFT[h.get('ac')] ? h.get('ac') : 'epic');
     if (h.has('h')&&Number.isFinite(+h.get('h'))) S.h = Math.max(0,+h.get('h'));
+    if(S.place==='canyon'||h.get('view')==='rear'){Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));}
     if (h.get('fly') === '1') S.fly = true;
     if (h.get('charts') === '1') S.drawer = true; }
   rebuild(); renderEnvPop(); try{selectTab(sessionStorage.getItem('winglab-tab')||'Controls');}catch{selectTab('Controls');} syncPilot(); layout();

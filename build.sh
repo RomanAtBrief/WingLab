@@ -37,7 +37,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 window.WL_MODS = { EffectComposer, RenderPass, UnrealBloomPass, OutputPass, RoomEnvironment };
 H
-  cat src/10-physics.js src/20-profile.js src/30-charts.js src/40-kit.js src/41-aircraft.js src/45-env.js src/50-scene.js
+  cat src/10-physics.js src/20-profile.js src/30-charts.js src/40-kit.js src/41-aircraft.js src/44-waterfall-field.js src/45-env.js src/46-canyon-world.js src/50-scene.js
   cat src/65-flight-director.js src/66-tilt-input.js src/70-gpu-core.js src/71-gpu-atmos.js src/72-gpu-mesh.js src/73-gpu-render.js src/74-gpu-terrain.js src/75-gpu-shadow.js src/76-gpu-trees.js src/76-waterfalls.js src/77-gpu-post.js src/78-gpu-clouds.js src/79-gpu-scene.js src/80-facade.js
   cat src/55-content.js src/60-ui.js
   printf '</script>\n'

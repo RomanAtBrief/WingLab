@@ -136,8 +136,8 @@ const Scene3DGL = (() => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.outputColorSpace = T.SRGBColorSpace; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
-    scene = new T.Scene(); camera = new T.PerspectiveCamera(36, 1, 0.3, 5000);
-    EnvGL.init(renderer);
+    scene = new T.Scene(); camera = new T.PerspectiveCamera(36, 1, 0.3, 25000);
+    EnvGL.init(renderer);host.dataset.renderer="webgl";
     if (location.hash === '#lite') { perf.scale = 0.3; EnvGL.state.quality = 0.1; }
     envRT = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, depthBuffer: false }); envRT.texture.colorSpace = T.LinearSRGBColorSpace;
     scene.background = envRT.texture;
@@ -155,7 +155,7 @@ const Scene3DGL = (() => {
     const rt = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, samples: 4 });
     composer = new mods.EffectComposer(renderer, rt);
     composer.addPass(new mods.RenderPass(scene, camera));
-    bloom = new mods.UnrealBloomPass(new T.Vector2(256, 256), 0.32, 0.55, 1.1); composer.addPass(bloom);
+    bloom = new mods.UnrealBloomPass(new T.Vector2(256, 256), 0.10, 0.55, 1.5); composer.addPass(bloom);
     composer.addPass(new mods.OutputPass());
     // orbit with pointer, wheel and pinch
     const cv = renderer.domElement, ptrs = new Map(); let pinch = 0;
@@ -223,11 +223,12 @@ const Scene3DGL = (() => {
     const t0 = performance.now();
     if (paused || matchMedia('(prefers-reduced-motion:reduce)').matches) dt = 0;
     time += dt;
+    if(EnvGL.state.place==='canyon')CanyonWorld.init(scene);
     const riverZ=x=>1300*Math.sin(x*Math.PI*2/14000)+350*Math.sin(x*Math.PI*4/14000);
-    const fallbackGround=(x,z)=>{if(routePlace!=='canyon')return 850;const d=Math.abs(z-riverZ(x));return d<108?0:d<200?60:d<275?200:330;};
+    const fallbackGround=(x,z)=>routePlace==='canyon'?CanyonWorld.height(((x%14000)+14000)%14000,z):850;
     if(routePlace!==EnvGL.state.place){routePlace=EnvGL.state.place;const route=[];
-      for(let i=0;i<180;i++){const a=i/180*Math.PI*2;route.push(routePlace==='canyon'?{x:i/180*14000,z:riverZ(i/180*14000)}:{x:4000*Math.sin(a),z:3000*Math.cos(a)});}
-      if(routePlace==='canyon')route.periodX=14000;FlightDirector.configure(routePlace,route,routePlace==='canyon'?180:3000);
+      for(let i=0;i<180;i++){const a=i/180*Math.PI*2;const x=i/180*14000+250;let p={x,z:riverZ(x)};if(routePlace==='canyon'){for(const f of CanyonWorld.falls){const approach=255*Math.exp(-(((x-f.x)/360)**2));p.x+=f.nx*approach;p.z+=f.nz*approach;}}route.push(routePlace==='canyon'?p:{x:4000*Math.sin(a),z:3000*Math.cos(a)});}
+      if(routePlace==='canyon')route.periodX=14000;FlightDirector.configure(routePlace,route,routePlace==='canyon'?120:3000);
     }
     const nav=FlightDirector.step(dt,vis.V,size,fallbackGround);
     const e = 1 - Math.exp(-Math.min(dt || 0.016, 0.05) * 5);
@@ -284,8 +285,10 @@ const Scene3DGL = (() => {
       renderer.toneMappingExposure = o.exposure;
       hemi.color.copy(o.lightColor).multiplyScalar(0.4).addScalar(0.1);
     }
+    CanyonWorld.update(nav,camera,EnvGL,dt);
+    if(routePlace==='canyon'){const sc=sun.shadow.camera;Object.assign(sc,{left:-650,right:650,top:650,bottom:-650,near:10,far:6000});sc.updateProjectionMatrix();sun.position.copy(EnvGL.out.lightDir).multiplyScalar(2200);sun.shadow.normalBias=1.2;scene.fog ||= new T.FogExp2('#a7b9c3',.00014);hemi.intensity=1.3;hemi.color.set('#b2cbdc');hemi.groundColor.set('#765744');scene.environmentIntensity=.3;}else{scene.fog=null;scene.environmentIntensity=1;hemi.intensity=envOK===false?1.6:0;hemi.groundColor.set('#5E6A74');sun.shadow.normalBias=.02;const h=size*.75;Object.assign(sun.shadow.camera,{left:-h,right:h,top:h,bottom:-h,near:1,far:size*6});sun.shadow.camera.updateProjectionMatrix();}
     EnvGL.render(envRT, camera);
-    composer.render();host.dataset.presented='true';if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
+    CanyonWorld.renderReflection(renderer,scene,camera);CanyonWorld.renderDepth(renderer,scene,camera);composer.render();host.dataset.presented='true';host.dataset.worldX=nav.x.toFixed(1);host.dataset.worldZ=nav.z.toFixed(1);host.dataset.altitude=nav.alt.toFixed(1);host.dataset.waterfalls=routePlace==='canyon'?'3':'0';if(performance.now()-telemetryAt>150){telemetryAt=performance.now();host.dispatchEvent(new CustomEvent('flighttelemetry',{detail:{...nav}}));}
     // keep the frame rate up: trade cloud and terrain detail for speed
     perf.acc += performance.now() - t0; perf.n++;
     if (perf.n >= 30) {
@@ -308,5 +311,5 @@ const Scene3DGL = (() => {
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
     g.putImageData(img, 0, 0); return cv.toDataURL();
   }
-  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get ready(){return host?.dataset.presented==='true';}, get view() { return viewName; } };
+  return { init, setAircraft, setView, set, toggle, frame, setLabels, thumbnail, setInsets, pause: p => { paused = p; }, get ready(){return host?.dataset.presented==='true'&&(EnvGL.state.place!=='canyon'||CanyonWorld.ready);}, get view() { return viewName; } };
 })();

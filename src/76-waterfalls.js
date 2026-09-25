@@ -1,7 +1,7 @@
 /* Spring-fed canyon cascades. Ribbons follow the generated rock surface and end
    in the river; world coordinates remain fixed as the flight origin moves. */
 const GWaterfalls = (() => {
-  let pipe,buffer,bind,count=0,cascadeCount=0,terrain=null;
+  let pipe,buffer,bind,count=0,cascadeCount=0,terrain=null,volumePipe,volumeBuf,volumeBG,volumeDepth,heroes=[];
   function buildCascades(river,heightAt){
     const out=[];let bend=0;
     for(let i=1;i<river.n;i++)if(Math.abs(river.cv[i])>Math.abs(river.cv[bend]))bend=i;
@@ -20,6 +20,8 @@ const GWaterfalls = (() => {
     return out;
   }
   function rebuild(){
+    heroes=WaterfallField.heroes(GTerrain.R.river,GTerrain.heightAt);
+    const packed=new Float32Array(24);heroes.forEach((f,i)=>packed.set([f.x,f.z,f.nx,f.nz,f.height,f.lip,f.width,f.end],i*8));G.device.queue.writeBuffer(volumeBuf,0,packed);
     const cascades=buildCascades(GTerrain.R.river,GTerrain.heightAt),data=[];cascadeCount=cascades.length;
     function vertex(p,u,v,kind,nx,nz){data.push(p.x,p.y,p.z,u,v,kind,nx,0,nz);}
     for(const c of cascades){
@@ -83,11 +85,51 @@ struct VO { @builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) wp:v
   let col=albedo*daylight/PI;
   return vec4f(col*alpha,alpha);
 }`});
+    volumeBuf=G.buf(96,GPUBufferUsage.UNIFORM,new Float32Array(24));
+    volumePipe=G.render({label:'volumetric-waterfall-spray',targets:[{format:'rgba16float',blend}],code:`${G.COMMON}
+@group(0) @binding(0) var<uniform> F:Frame;
+@group(0) @binding(1) var<uniform> falls:array<vec4f,6>;
+@group(0) @binding(2) var sceneDepth:texture_depth_2d;
+${WaterfallField.wgsl()}
+struct WV{@builtin(position) p:vec4f};
+@vertex fn vs(@builtin(vertex_index) id:u32)->WV{var o:WV;let p=vec2f(f32((id<<1u)&2u),f32(id&2u));o.p=vec4f(p*2.0-1.0,0,1);return o;}
+@fragment fn fs(i:WV)->@location(0) vec4f{
+  let uv=i.p.xy*F.invRes;let ndc=vec2f(uv.x*2.0-1.0,1.0-uv.y*2.0);
+  let far=F.invViewProj*vec4f(ndc,.00001,1);let rd=normalize(far.xyz/far.w-F.camPos);
+  let depth=textureLoad(sceneDepth,vec2i(i.p.xy),0);var limit=20000.0;
+  if(depth>0.0){let h=F.invViewProj*vec4f(ndc,depth,1);limit=distance(h.xyz/h.w,F.camPos);}
+  var total=vec3f(0);var trans=1.0;
+  for(var k=0u;k<3u;k++){
+    let f=falls[k*2u];let s=falls[k*2u+1u];if(s.x<1.0){continue;}
+    var centre=f.xy-F.terrOff;centre-=round(centre/F.tile)*F.tile;
+    let axis=vec2f(f.w,-f.z);let off=F.camPos.xz-centre;
+    let ro=vec3f(dot(off,axis),F.camPos.y+F.planeAlt,dot(off,f.zw));
+    let d=vec3f(dot(rd.xz,axis),rd.y,dot(rd.xz,f.zw));
+    let hit=wfBox(ro,d,vec3f(-s.z*1.6,-3,s.w-120.0),vec3f(s.z*1.6,s.x+5.0,s.y+20.0));
+    let a=max(0.0,hit.x);let b=min(hit.y,limit);if(b<=a){continue;}
+    let ds=(b-a)/96.0;var tr=1.0;var sum=vec3f(0);
+    let sun=vec3f(dot(F.sunDir.xz,axis),F.sunDir.y,dot(F.sunDir.xz,f.zw));
+    for(var j=0u;j<96u;j++){
+      let p=ro+d*(a+(f32(j)+.5)*ds);let den=wfDensity(p,s,F.time);let rho=den.x+den.y;
+      if(rho>.0005){let sha=exp(-dot(wfDensity(p+sun*7.0,s,F.time),vec2f(1))*7.0);
+        let phase=.65+.35*pow(max(dot(rd,F.sunDir),0.0),8.0);
+        let light=F.sunE*(vec3f(.11,.15,.20)+F.lightTint*(.38+.45*sha)*phase)/PI;
+        let alpha=1.0-exp(-rho*ds);sum+=tr*alpha*light;tr*=1.0-alpha;if(tr<.012){break;}
+      }
+    }
+    total+=trans*sum;trans*=tr;
+  }
+  return vec4f(total,1.0-trans);
+}`});
     bind=null;
   }
   const hook={name:'canyon-cascades',pre(){
     if(GTerrain.place?.key!=='canyon'||!GTerrain.cpuReady){terrain=null;count=0;cascadeCount=0;return;}
     if(terrain!==GTerrain.R.river){terrain=GTerrain.R.river;rebuild();bind=G.bind(pipe,0,[GR.frameBuf,GTerrain.R.aux.createView(),GTerrain.R.aux2.createView(),G.sampler('linRepeat'),GTerrain.R.shV]);}
+  },post(enc){
+    if(GTerrain.place?.key!=='canyon'||!heroes.length)return;
+    const rt=GR.RT();if(volumeDepth!==rt.depth){volumeDepth=rt.depth;volumeBG=G.bind(volumePipe,0,[GR.frameBuf,volumeBuf,rt.V.depth]);}const bg=volumeBG;
+    const p=enc.beginRenderPass({label:'waterfall-volume',colorAttachments:[{view:rt.V.hdr,loadOp:'load',storeOp:'store'}]});p.setPipeline(volumePipe);p.setBindGroup(0,bg);p.draw(3);p.end();
   },forward(pass){if(!count)return;pass.setPipeline(pipe);pass.setBindGroup(0,bind);pass.setVertexBuffer(0,buffer);pass.draw(count);}};
-  return {init,hook,buildCascades,get count(){return cascadeCount;}};
+  return {init,hook,buildCascades,get heroes(){return heroes;},get count(){return cascadeCount;}};
 })();

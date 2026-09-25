@@ -2,16 +2,24 @@
 const G = (() => {
   const S = { device: null, adapter: null, ok: false, features: new Set(), errors: [] };
 
+  // Some Safari/device combinations leave adapter acquisition pending after
+  // a GPU reset. Never leave the loading screen waiting for it indefinitely.
+  async function bounded(promise,ms,disposeLate){
+    let expired=false,timer;
+    const timeout=new Promise(resolve=>{timer=setTimeout(()=>{expired=true;resolve(null);},ms);});
+    try{return await Promise.race([promise.then(value=>{if(expired){disposeLate?.(value);return null;}return value;}),timeout]);}finally{clearTimeout(timer);}
+  }
   async function probe() {
     try {
       if (!navigator.gpu || /(^|[#&])gl($|&)/.test(location.hash.slice(1))) return false;
-      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      const adapter = await bounded(navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }),6000);
       if (!adapter) return false;
       const want = ['float32-filterable', 'rg11b10ufloat-renderable'].filter(f => adapter.features.has(f));
       const L = adapter.limits, req = {};
       for (const [k, v] of Object.entries({ maxStorageTexturesPerShaderStage: 8, maxSampledTexturesPerShaderStage: 16, maxColorAttachmentBytesPerSample: 32,
         maxComputeWorkgroupStorageSize: 16384, maxStorageBufferBindingSize: 134217728, maxBufferSize: 268435456 })) if (L[k] !== undefined) req[k] = Math.min(v, L[k]);
-      const device = await adapter.requestDevice({ requiredFeatures: want, requiredLimits: req });
+      const device = await bounded(adapter.requestDevice({ requiredFeatures: want, requiredLimits: req }),6000,d=>d?.destroy());
+      if(!device)return false;
       device.lost.then(info => { console.warn('WebGPU device lost:', info.message); S.lost = true; });
       device.addEventListener('uncapturederror', e => { if (S.errors.length < 20) { S.errors.push(e.error.message); console.error('WebGPU:', e.error.message); } });
       // smaller textures on phones and tablets (memory), or when asked for with #lite

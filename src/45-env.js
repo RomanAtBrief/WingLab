@@ -157,7 +157,8 @@ const EnvGL = (() => {
       return normalize(vec3(terrain(p - vec2(e, 0), o) - terrain(p + vec2(e, 0), o), 2.0 * e, terrain(p - vec2(0, e), o) - terrain(p + vec2(0, e), o))); }
 
     vec2 skyUV(vec3 d) { float el = asin(clamp(d.y, -1.0, 1.0)); return vec2(atan(d.z, d.x) / 6.2831853 + 0.5, 0.5 + 0.5 * sign(el) * sqrt(abs(el) / 1.5707963)); }
-    vec3 sky(vec3 d) { vec3 c = texture2D(uSky, skyUV(d)).rgb; float g = dot(c, vec3(0.3, 0.55, 0.15));
+    vec3 sky(vec3 d) { if(uEnv==3){vec3 blue=mix(vec3(.43,.57,.68),vec3(.055,.19,.38),smoothstep(0.0,.7,d.y));float wisps=fbm(d.xz/max(.12,d.y)*2.4,5);return mix(blue,vec3(.72,.76,.76),smoothstep(.57,.74,wisps)*smoothstep(.03,.18,d.y)*.7);}
+      vec3 c = texture2D(uSky, skyUV(d)).rgb; float g = dot(c, vec3(0.3, 0.55, 0.15));
       return mix(c, vec3(g) * vec3(0.93, 0.97, 1.04), uOvercast * 0.85) * (1.0 - 0.5 * uOvercast) + vec3(0.0006, 0.0009, 0.0018) * uNight; }
     vec3 fogColor(vec3 rd) { vec3 d = normalize(vec3(rd.x, max(rd.y, 0.015), rd.z)); float s = max(dot(d, uLight), 0.0);
       return sky(d) + uLightCol * 0.035 * pow(s, 8.0) * (1.0 - uOvercast); }
@@ -272,7 +273,8 @@ const EnvGL = (() => {
     void main() {
       vec3 rd = normalize(vDir), ro = uCam;
       float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      float tT = marchTerrain(ro, rd, 220000.0);
+      // The canyon uses real depth-tested meshes in CanyonWorld.
+      float tT = uEnv==3 ? -1.0 : marchTerrain(ro, rd, 220000.0);
       vec3 col;
       if (tT > 0.0) col = mix(shade(ro, rd, tT), fogColor(rd), fogAmount(ro, rd, tT));
       else {
@@ -280,7 +282,7 @@ const EnvGL = (() => {
         col += uSunCol * smoothstep(0.99994, 0.99998, dot(rd, uSun)) * (1.0 - uOvercast);
         if (rd.y < 0.0) col = mix(col, fogColor(rd), fogAmount(ro, rd, 220000.0));
       }
-      vec4 cl = clouds(ro, rd, tT > 0.0 ? tT : 1e9, jit);
+      vec4 cl = uEnv==3?vec4(0,0,0,1):clouds(ro, rd, tT > 0.0 ? tT : 1e9, jit);
       col = col * cl.a + cl.rgb;
       if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
       gl_FragColor = vec4(min(col, vec3(30000.0)), 1.0);
@@ -335,7 +337,7 @@ const EnvGL = (() => {
     if (w === 'fog') { fog = 1; overcast = 0.35; }
     if (P.env === 2) snow = Math.max(snow, 0);
     const sun = dirFrom(tm.el, tm.az), isNight = tm.el < -6;
-    const tr = transmittance(state.alt, sun.y), I = 20;
+    const tr = transmittance(state.alt, sun.y), I = state.place==='canyon'?3:20;
     u.uEnv.value = P.env; u.uHmax.value = P.hmax; u.uHaze.value = P.haze * (w === 'fog' ? 0.25 : w === 'rain' || w === 'snow' ? 0.4 : 1);
     u.uCB.value = c.base; u.uCT.value = c.top; u.uCover.value = c.cover; u.uDens.value = state.weatherEffects===false?0:c.dens; u.uCScale.value = c.scale; u.uFlat.value = c.flat;
     u.uOvercast.value = overcast; u.uFog.value = fog; u.uSnow.value = snow; u.uWet.value = wet;

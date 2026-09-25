@@ -475,7 +475,7 @@ struct AO{@builtin(position) pos:vec4f,@location(0) uv:vec2f,@location(1) opacit
     const vp = GR.projRZ(camera, new T.Matrix4(), 0, 0).multiply(camera.matrixWorldInverse);
     updateTrails(alt, env);
     aerosolOn=show.flow&&show.weather&&!matchMedia('(prefers-reduced-motion:reduce)').matches;
-    host.dataset.cascades=String(GWaterfalls.count);
+    host.dataset.cascades=String(GWaterfalls.count);host.dataset.waterfalls=String(GWaterfalls.heroes.length);host.dataset.renderer="webgpu";
     GTerrain.update({ worldX: world.x, worldZ: world.z, env }, camera, vp);
     GShadow.update(camera, size, alt - Math.max(ground, TP.water), env.sunDir, alt);
     envTimer -= dt;

@@ -367,7 +367,7 @@
     const g = e.target.closest('.grp-h'); if (g) { const s = g.parentElement, open = s.dataset.open !== 'true'; s.dataset.open = String(open); if (s.dataset.key) S.open[s.dataset.key] = open; return; }
     const cl = e.target.closest('[data-close]'); if (cl) { const k = cl.dataset.close; if (k === 'build') S.build = false; else if (k === 'fly') S.fly = false; else $(k).hidden = true;syncPopState(); if(k==='envPop')$('envBtn').setAttribute('aria-expanded','false');if(k==='acPop')$('acBtn').setAttribute('aria-expanded','false');layout();const trigger={acPop:'acBtn',envPop:'envBtn',overlaysPop:'overlaysBtn',morePop:'moreBtn',fly:'flyBtn',build:'flyBtn'}[k];if(trigger)($(trigger).getClientRects().length?$(trigger):$('moreBtn')).focus();return; }
     const ac = e.target.closest('[data-ac]'); if (ac) { $('acPop').hidden = true;layout(); $('acBtn').setAttribute('aria-expanded', 'false'); if (ac.dataset.ac !== S.cfg.aircraft) { loadAircraft(ac.dataset.ac); rebuild(); const a = A.AIRCRAFT[ac.dataset.ac]; toast(a.name, a.blurb, null); } return; }
-    const pl = e.target.closest('[data-place]'); if (pl) { if(S.place!==pl.dataset.place){S.loaded=false;$('loading').hidden=false;$('loading').style.opacity='1';$('loadingMessage').textContent='Preparing your flight…';}S.place = pl.dataset.place; Env.set('place', S.place); S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
+    const pl = e.target.closest('[data-place]'); if (pl) { if(S.place!==pl.dataset.place){S.loaded=false;$('loading').hidden=false;$('loading').style.opacity='1';$('loadingMessage').textContent='Preparing your flight…';}S.place = pl.dataset.place; Env.set('place', S.place);if(S.place==='canyon'){Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));} S.h=S.place==='canyon'?480:1150; syncControls();S.perfDirty=true;update(); renderEnvPop(); return; }
     const tm = e.target.closest('[data-time]'); if (tm) { S.time = tm.dataset.time; Env.set('time', S.time); renderEnvPop(); return; }
     const wx = e.target.closest('[data-wx]'); if (wx) { S.weather = wx.dataset.wx; Env.set('weather', S.weather); renderEnvPop(); return; }
     if (!e.target.closest('.infocard')) $('infoCard').hidden = true;
@@ -453,6 +453,7 @@
     Env.set('place', S.place); Env.set('time', S.time); Env.set('weather', S.weather);
     loadAircraft(A.AIRCRAFT[h.get('ac')] ? h.get('ac') : 'epic');
     if (h.has('h')&&Number.isFinite(+h.get('h'))) S.h = Math.max(0,+h.get('h'));
+    if(S.place==='canyon'||h.get('view')==='rear'){Scene3D.setView('rear');document.querySelectorAll('#viewSeg button,#mobileCamera button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v||b.dataset.view)==='rear')));}
     if (h.get('fly') === '1') S.fly = true;
     if (h.get('charts') === '1') S.drawer = true; }
   rebuild(); renderEnvPop(); try{selectTab(sessionStorage.getItem('winglab-tab')||'Controls');}catch{selectTab('Controls');} syncPilot(); layout();

@@ -4,7 +4,7 @@ const GTerrain = (() => {
   // tile: size of the repeating world square (m); water: sea / river level (m); track: the flight line runs along +x at this z (fraction of tile)
   const PLACES = {
     islands: { id: 0, tile: 32768, water: 0, hmax: 560, seed: 11, track: 0.5, lodK: 6, waves: 0.45, treeLine: 9000, snowLine: 99999, albedo: [0.05, 0.085, 0.09] },
-    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.22, 0.20, 0.17] }
+    canyon:  { id: 1, tile: 24576, water: 0, hmax: 660, seed: 23, track: 0.5, lodK: 7, waves: 0.05, treeLine: 9000, snowLine: 99999, albedo: [0.32, 0.21, 0.13] }
   };
   const GRID = 32, DTN = 1024;
   let d, frameBuf, R = {}, P = {}, BG = {}, place = null, RES = 2048, SHRES = 1024, genDue = false, shadowDue = false, ready = false;
@@ -252,7 +252,7 @@ fn strataCol(y: f32) -> vec3f {
   // Muted limestone, shale and iron-bearing sandstone, in linear reflectance.
   let beds=.5+.5*sin(y*.17+1.3*sin(y*.037));
   var c=mix(lin(vec3f(.54,.49,.43)),lin(vec3f(.66,.57,.48)),beds*.5);
-  c=mix(c,mix(lin(vec3f(.59,.43,.36)),lin(vec3f(.70,.57,.47)),beds),smoothstep(42.0,62.0,y));
+  c=mix(c,mix(lin(vec3f(.61,.40,.28)),lin(vec3f(.70,.53,.39)),beds),smoothstep(42.0,62.0,y));
   c=mix(c,mix(lin(vec3f(.67,.57,.47)),lin(vec3f(.77,.68,.57)),beds*.65),smoothstep(155.0,175.0,y));
   c=mix(c,lin(vec3f(.73,.67,.57)),smoothstep(286.0,310.0,y)*.7);
   c=mix(c,lin(vec3f(.51,.45,.40)),smoothstep(330.0,348.0,y));
@@ -822,7 +822,7 @@ struct GO { @location(0) a: vec4f, @location(1) n: vec4f, @location(2) m: vec4f 
   col *= mix(1.0, modA / max(wr + wv + ws, 1e-3), fade);
   let scanL=max(dot(scan,vec3f(.2126,.7152,.0722)),.025);
   let chroma=clamp(scan/scanL,vec3f(.65),vec3f(1.35));
-  col*=mix(vec3f(1.0),chroma*clamp(scanL/.19,.55,1.5),wr*fade*TP.p1*.48);
+  col*=mix(vec3f(1.0),chroma*clamp(scanL/.19,.55,1.5),wr*fade*TP.p1*.72);
   let cav = mix(1.0, sat(0.6 + rk.a * 0.55), wr * fade) * mix(1.0, 0.65 + 0.45 * cano.a, wv * fade);
   rough = mix(rough, clamp(rk.a, 0.5, 1.0), wr * fade * .65);
   var o: GO;
@@ -1212,7 +1212,9 @@ ${GAtmos.LL}
   // river tile, so there is no teleport or shortcut across the plateau at the end.
   function scenicRoute(){
     if(place?.id===1&&R.river){const m=R.river,out=[];let bi=0;for(let i=0;i<m.n;i++)if(Math.abs(m.cv[i])>Math.abs(m.cv[bi]))bi=i;
-      const start=Math.max(0,bi-350);
+      const hero=typeof WaterfallField!=='undefined'?WaterfallField.heroes(m,heightAt)[0]:null;
+      if(hero){let nearest=Infinity;for(let i=0;i<m.n;i++){const d=(m.px[i]-hero.x)**2+(m.pz[i]-hero.z)**2;if(d<nearest){nearest=d;bi=i;}}}
+      const start=Math.max(0,bi-220);
       for(let i=start;i<m.n;i+=22)out.push({x:m.px[i],z:m.pz[i]});
       for(let i=0;i<start;i+=22)out.push({x:m.px[i]+place.tile,z:m.pz[i]});
       out.periodX=place.tile;return out;
